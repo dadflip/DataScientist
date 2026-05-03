@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ml-pipeline"
+version = "2.0.0"
+authors = [{name = "dadflip"}]
+description = "ML Pipeline - Framework d'apprentissage automatique"
+readme = "../README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "pandas",
+    "numpy",
+    "matplotlib",
+    "seaborn",
+    "scikit-learn",
+    "scipy",
+    "ipywidgets",
+    "toml",
+    "jinja2",
+]
+
+[project.optional-dependencies]
+boosting = ["xgboost", "lightgbm", "catboost"]
+vision = ["opencv-python-headless", "Pillow"]
+nlp = ["nltk", "spacy", "transformers"]
+graph = ["networkx"]
+all = [
+    "xgboost", "lightgbm", "catboost",
+    "category_encoders",
+    "opencv-python-headless", "Pillow",
+    "networkx",
+    "rdflib", "owlready2",
+    "pyarrow",
+    "tqdm", "joblib",
+]
+
+[project.urls]
+Homepage = "https://github.com/dadflip/DataScientist"
+
+[tool.setuptools]
+packages = ["ml_pipeline", "ml_pipeline.steps"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+ml_pipeline = ["*.toml", "*.json", "*.yaml", "*.yml"]
