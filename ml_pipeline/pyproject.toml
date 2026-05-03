@@ -7,7 +7,7 @@ name = "ml-pipeline"
 version = "2.0.0"
 authors = [{name = "dadflip"}]
 description = "ML Pipeline - Framework d'apprentissage automatique"
-readme = "../README.md"
+readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "pandas",

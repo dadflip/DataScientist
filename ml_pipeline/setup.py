@@ -16,7 +16,7 @@ setup(
     version="2.0.0",
     author="dadflip",
     description="ML Pipeline - Framework d'apprentissage automatique",
-    long_description=open("../README.md", encoding="utf-8").read() if __import__('os').path.exists("../README.md") else "",
+    long_description=open("README.md", encoding="utf-8").read() if __import__('os').path.exists("README.md") else "",
     long_description_content_type="text/markdown",
     url="https://github.com/dadflip/DataScientist",
     packages=find_packages(),
