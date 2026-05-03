@@ -33,8 +33,7 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     package_data={
-        "ml_pipeline": ["*.toml", "*.json", "*.yaml", "*.yml"],
-        "config": ["*.toml"],
+        "ml_pipeline": ["*.toml", "*.json", "*.yaml", "*.yml", "default.toml"],
     },
     data_files=[
         ("config", ["config/default.toml"]),
