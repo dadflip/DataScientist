@@ -1,0 +1,1722 @@
+# =============================================================================
+# ML Pipeline — Configuration centralisée v2.0
+# Source unique de vérité. Sections dans l'ordre d'exécution du pipeline.
+# Généré depuis cell0.py → cell16.py
+# Format: TOML
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# META — Versioning, reproductibilité
+# ---------------------------------------------------------------------------
+[meta]
+version = "2.0.0"
+name = "ML Pipeline"
+author = ""
+description = ""
+global_random_state = 42
+global_verbose = false
+
+# ---------------------------------------------------------------------------
+# ENVIRONMENT — Packages, chemins, logs
+# ---------------------------------------------------------------------------
+[environment]
+log_level = "INFO"
+log_file = "pipeline.log"
+
+[environment.paths]
+output_dir = "outputs/"
+default_submission = "submission.csv"
+default_report = "execution_report.html"
+default_script = "exported_pipeline.py"
+default_models = "trained_models.pkl"
+
+[[environment.packages.groups]]
+id = "core"
+label = "Core (toujours installé)"
+packages = ["pandas", "numpy", "matplotlib", "seaborn", "scikit-learn", "scipy"]
+check = ["pandas", "numpy", "matplotlib", "seaborn", "sklearn", "scipy"]
+default = true
+required = true
+
+[[environment.packages.groups]]
+id = "boosting"
+label = "Gradient Boosting (XGBoost, LightGBM, CatBoost)"
+packages = ["xgboost", "lightgbm", "catboost"]
+check = ["xgboost", "lightgbm", "catboost"]
+default = true
+required = false
+
+[[environment.packages.groups]]
+id = "cat_encoders"
+label = "Category Encoders"
+packages = ["category_encoders"]
+check = ["category_encoders"]
+default = true
+required = false
+
+[[environment.packages.groups]]
+id = "torch"
+label = "PyTorch"
+packages = ["torch", "torchvision"]
+check = ["torch", "torchvision"]
+default = false
+required = false
+
+[[environment.packages.groups]]
+id = "transformers"
+label = "Transformers (HuggingFace)"
+packages = ["transformers", "sentence-transformers", "tokenizers"]
+check = ["transformers", "sentence_transformers"]
+default = false
+required = false
+
+[[environment.packages.groups]]
+id = "nlp_classic"
+label = "NLP classique (NLTK, spaCy)"
+packages = ["nltk", "spacy"]
+check = ["nltk", "spacy"]
+default = false
+required = false
+
+[[environment.packages.groups]]
+id = "vision"
+label = "Computer Vision (OpenCV, Pillow)"
+packages = ["opencv-python-headless", "Pillow"]
+check = ["cv2", "PIL"]
+default = true
+required = false
+
+[[environment.packages.groups]]
+id = "graph"
+label = "Graph (NetworkX)"
+packages = ["networkx"]
+check = ["networkx"]
+default = true
+required = false
+
+[[environment.packages.groups]]
+id = "ontology"
+label = "Ontologie (rdflib, owlready2)"
+packages = ["rdflib", "owlready2"]
+check = ["rdflib", "owlready2"]
+default = true
+required = false
+
+[[environment.packages.groups]]
+id = "timeseries"
+label = "Séries temporelles (statsmodels, prophet)"
+packages = ["statsmodels", "prophet"]
+check = ["statsmodels"]
+default = false
+required = false
+
+[[environment.packages.groups]]
+id = "dimreduce"
+label = "Réduction dimensionnelle (UMAP)"
+packages = ["umap-learn"]
+check = ["umap"]
+default = false
+required = false
+
+[[environment.packages.groups]]
+id = "arrow"
+label = "Columnar (PyArrow)"
+packages = ["pyarrow"]
+check = ["pyarrow"]
+default = true
+required = false
+
+[[environment.packages.groups]]
+id = "explainability"
+label = "Explicabilité (SHAP, LIME)"
+packages = ["shap", "lime"]
+check = ["shap", "lime"]
+default = false
+required = false
+
+[[environment.packages.groups]]
+id = "hpo"
+label = "Hyperparameter Tuning (Optuna, Hyperopt)"
+packages = ["optuna", "hyperopt"]
+check = ["optuna", "hyperopt"]
+default = false
+required = false
+
+[[environment.packages.groups]]
+id = "imbalanced"
+label = "Données déséquilibrées (imbalanced-learn)"
+packages = ["imbalanced-learn"]
+check = ["imblearn"]
+default = false
+required = false
+
+[[environment.packages.groups]]
+id = "plotting"
+label = "Visualisation avancée (Plotly, Bokeh)"
+packages = ["plotly", "bokeh"]
+check = ["plotly", "bokeh"]
+default = false
+required = false
+
+[[environment.packages.groups]]
+id = "tracking"
+label = "Tracking expériences (MLflow)"
+packages = ["mlflow"]
+check = ["mlflow"]
+default = false
+required = false
+
+[[environment.packages.groups]]
+id = "utils"
+label = "Utilitaires (tqdm, joblib, python-dotenv)"
+packages = ["tqdm", "joblib", "python-dotenv"]
+check = ["tqdm", "joblib", "dotenv"]
+default = true
+required = false
+
+# ---------------------------------------------------------------------------
+# PIPELINE — Ordre et activation des étapes
+# ---------------------------------------------------------------------------
+[[pipeline.steps]]
+step = "loading"
+enabled = true
+
+[[pipeline.steps]]
+step = "domains"
+enabled = true
+
+[[pipeline.steps]]
+step = "eda"
+enabled = true
+
+[[pipeline.steps]]
+step = "feature_eng"
+enabled = true
+
+[[pipeline.steps]]
+step = "cleaning"
+enabled = true
+
+[[pipeline.steps]]
+step = "encoding"
+enabled = true
+
+[[pipeline.steps]]
+step = "selection"
+enabled = true
+
+[[pipeline.steps]]
+step = "split"
+enabled = true
+
+[[pipeline.steps]]
+step = "modeling"
+enabled = true
+
+[[pipeline.steps]]
+step = "metrics"
+enabled = true
+
+[[pipeline.steps]]
+step = "optimization"
+enabled = false
+
+[[pipeline.steps]]
+step = "explain"
+enabled = false
+
+[[pipeline.steps]]
+step = "export"
+enabled = true
+
+# ---------------------------------------------------------------------------
+# ÉTAPE 1 — LOADING
+# ---------------------------------------------------------------------------
+[loading]
+encodings = ["utf-8", "utf-8-sig", "latin-1", "cp1252", "iso-8859-1"]
+ts_freqs = ["(auto)", "D", "W", "MS", "QS", "AS", "H", "T"]
+image_modes = ["RGB", "RGBA", "L", "1"]
+graph_formats = ["auto", "graphml", "gml", "edgelist", "adjlist"]
+zip_formats = ["csv", "image", "text", "json"]
+sklearn_datasets = ["iris", "wine", "breast_cancer", "diabetes", "digits", "california_housing"]
+
+[loading.supported_types]
+"CSV (.csv)" = "csv"
+"TSV (.tsv)" = "tsv"
+"Excel (.xlsx / .xls)" = "excel"
+"JSON (.json)" = "json"
+"Parquet (.parquet)" = "parquet"
+"Feather (.feather)" = "feather"
+"HDF5 (.h5 / .hdf)" = "hdf5"
+"ORC (.orc)" = "orc"
+"SQLite (.db / .sqlite)" = "sqlite"
+"Séries temporelles (CSV + colonne datetime)" = "timeseries"
+"Image (.png / .jpg / .bmp)" = "image"
+"Graphe (.graphml / .gml)" = "graph"
+"Texte (.txt)" = "text"
+"Ontologie (.owl / .rdf / .ttl)" = "ontology"
+"Batch ZIP (dossier de fichiers)" = "zip"
+"Presse-papier (coller du CSV)" = "clipboard"
+"Dataset sklearn" = "sklearn"
+
+[loading.file_accepts]
+csv = ".csv"
+tsv = ".tsv"
+excel = ".xlsx,.xls"
+json = ".json"
+parquet = ".parquet"
+feather = ".feather"
+hdf5 = ".h5,.hdf5"
+orc = ".orc"
+sqlite = ".db,.sqlite"
+timeseries = ".csv"
+image = ".png,.jpg,.jpeg,.bmp"
+graph = ".graphml,.gml,.txt"
+text = ".txt"
+ontology = ".owl,.rdf,.ttl"
+zip = ".zip"
+
+[[loading.modes]]
+label = "Fichier unique"
+value = "single"
+slots = ["Data"]
+
+[[loading.modes]]
+label = "Train / Test"
+value = "train_test"
+slots = ["Train", "Test"]
+
+[[loading.modes]]
+label = "Train / Validation / Test"
+value = "train_val_test"
+slots = ["Train", "Validation", "Test"]
+
+[[loading.modes]]
+label = "Multi-sources hétérogènes"
+value = "multi_source"
+slots = ["Source A", "Source B", "Source C", "Source D"]
+
+[[loading.modes]]
+label = "Personnalisé"
+value = "custom"
+slots = ["Sources"]
+
+[[loading.mode_configs.single]]
+id = "auto_split"
+type = "dropdown"
+label = "Auto Split"
+options = ["None", "Train/Test", "Train/Val/Test"]
+value = "None"
+
+[[loading.mode_configs.single]]
+id = "test_size"
+type = "floatslider"
+label = "Test Size %"
+value = 0.2
+min = 0.01
+max = 0.99
+step = 0.01
+
+[[loading.mode_configs.single]]
+id = "val_size"
+type = "floatslider"
+label = "Val Size %"
+value = 0.1
+min = 0.0
+max = 0.99
+step = 0.01
+
+[[loading.mode_configs.single]]
+id = "stratify"
+type = "text"
+label = "Stratify Col"
+value = ""
+placeholder = "nom de colonne"
+
+[[loading.mode_configs.train_test]]
+id = "align_cols"
+type = "checkbox"
+label = "Aligner colonnes"
+value = false
+
+[[loading.mode_configs.train_val_test]]
+id = "align_cols"
+type = "checkbox"
+label = "Aligner colonnes"
+value = false
+
+[[loading.mode_configs.multi_source]]
+id = "concat"
+type = "checkbox"
+label = "Concat auto"
+value = false
+
+[loading.preview]
+max_rows = 5
+sample_threshold = 100_000
+sample_size = 10_000
+
+# ---------------------------------------------------------------------------
+# ÉTAPE 2 — DOMAINS
+# ---------------------------------------------------------------------------
+[[domains.supported]]
+label = "Classification binaire"
+value = "classification_binary"
+task = "classification"
+subtask = "binary"
+
+[[domains.supported]]
+label = "Classification multiclasse"
+value = "classification_multiclass"
+task = "classification"
+subtask = "multiclass"
+
+[[domains.supported]]
+label = "Régression"
+value = "regression_continuous"
+task = "regression"
+subtask = "continuous"
+
+[[domains.supported]]
+label = "Clustering"
+value = "clustering"
+task = "clustering"
+subtask = "null"
+
+[[domains.supported]]
+label = "Séries temporelles"
+value = "timeseries"
+task = "timeseries"
+subtask = "null"
+
+[[domains.supported]]
+label = "NLP"
+value = "nlp"
+task = "nlp"
+subtask = "null"
+
+[[domains.supported]]
+label = "Computer Vision"
+value = "computer_vision"
+task = "computer_vision"
+subtask = "null"
+
+[[domains.supported]]
+label = "Analyse de graphes"
+value = "graph"
+task = "graph"
+subtask = "null"
+
+[[domains.supported]]
+label = "Ontologie / Knowledge Graph"
+value = "ontology"
+task = "ontology"
+subtask = "null"
+
+[domains.tasks_by_domain.ontology]
+tasks = ["Consistency Checking", "Knowledge Graph Completion", "Entity Linking", "Semantic Reasoning"]
+inference = ["RDFS", "OWL-DL", "OWL-Full", "Custom Rule System"]
+
+[domains.tasks_by_domain.nlp]
+tasks = ["Text Classification", "Sentiment Analysis", "Named Entity Recognition (NER)", "Summarization", "Question Answering"]
+
+[domains.tasks_by_domain.computer_vision]
+tasks = ["Image Classification", "Object Detection", "Image Segmentation", "Face Recognition"]
+
+# ---------------------------------------------------------------------------
+# ÉTAPE 3 — EDA
+# ---------------------------------------------------------------------------
+[eda]
+univariate_plots = ["auto", "hist", "kde", "box", "violin", "bar", "pie"]
+bivariate_plots = ["auto", "scatter", "hexbin", "hist2d", "kde", "box", "violin", "strip", "swarm", "heatmap", "stacked_bar", "pie"]
+multivariate = ["Correlation Matrix", "Pairplot"]
+correlation_methods = ["pearson", "spearman", "kendall"]
+palettes = ["Set1", "Set2", "Set3", "viridis", "plasma", "coolwarm", "husl"]
+ts_plots = ["Line", "Scatter", "Area", "Box (par mois/année)", "Autocorrélation"]
+
+# ---------------------------------------------------------------------------
+# ÉTAPE 4 — FEATURE ENGINEERING
+# ---------------------------------------------------------------------------
+[feature_eng]
+math_operations = ["+", "-", "*", "/", "log(A)", "exp(A)", "sqrt(A)", "A^2", "A^B/C", "Abs(A)", "Modulo"]
+text_operations = ["Lowercase", "Uppercase", "Length", "Extract Regex", "Replace", "Split & Keep N"]
+date_operations = ["Year", "Month", "Day", "DayOfWeek", "Hour", "Minute", "IsWeekend"]
+viz_types = ["auto", "scatter", "line", "bar", "box", "violin", "hist", "kde"]
+manage_actions = ["Set Type (Meta)", "Duplicate", "Delete"]
+
+[feature_eng.binning]
+strategies = ["Equal Width (Cut)", "Equal Frequency (Qcut)", "Custom Edges"]
+
+# ---------------------------------------------------------------------------
+# ÉTAPE 5 — CLEANING
+# ---------------------------------------------------------------------------
+[[cleaning.missing]]
+label = "Ne rien faire"
+value = "none"
+
+[[cleaning.missing]]
+label = "Supprimer lignes avec NaN"
+value = "drop_rows"
+code = "df.dropna(subset=[col], inplace=True)"
+
+[[cleaning.missing]]
+label = "Supprimer colonne"
+value = "drop_cols"
+code = "df.drop(columns=[col], inplace=True)"
+
+[[cleaning.missing]]
+label = "Remplacer : Moyenne"
+value = "mean"
+code = "df[col].fillna(df[col].mean(), inplace=True)"
+
+[[cleaning.missing]]
+label = "Remplacer : Médiane"
+value = "median"
+code = "df[col].fillna(df[col].median(), inplace=True)"
+
+[[cleaning.missing]]
+label = "Remplacer : Mode"
+value = "mode"
+code = "df[col].fillna(df[col].mode()[0], inplace=True)"
+
+[[cleaning.missing]]
+label = "Remplacer : 0"
+value = "zero"
+code = "df[col].fillna(0, inplace=True)"
+
+[[cleaning.missing]]
+label = "Remplacer : Constante custom"
+value = "constant"
+params = { fill_value = "MISSING" }
+code = "df[col].fillna(params['fill_value'], inplace=True)"
+
+[[cleaning.missing]]
+label = "Forward fill (ffill)"
+value = "ffill"
+params = { limit = "null" }
+code = "df[col].ffill(inplace=True)"
+
+[[cleaning.missing]]
+label = "Backward fill (bfill)"
+value = "bfill"
+params = { limit = "null" }
+code = "df[col].bfill(inplace=True)"
+
+[[cleaning.missing]]
+label = "Interpolation linéaire"
+value = "interpolate_linear"
+code = "df[col] = df[col].interpolate(method='linear')"
+
+[[cleaning.missing]]
+label = "Interpolation temporelle"
+value = "interpolate_time"
+code = "df[col] = df[col].interpolate(method='time')"
+
+[[cleaning.missing]]
+label = "KNN Imputer"
+value = "knn"
+params = { n_neighbors = 5, weights = "uniform" }
+
+[[cleaning.missing]]
+label = "Iterative Imputer (MICE)"
+value = "mice"
+params = { max_iter = 10, random_state = 42 }
+
+[[cleaning.missing]]
+label = "SimpleImputer (most_frequent)"
+value = "simple_most_frequent"
+
+[[cleaning.missing]]
+label = "Flag manquant puis remplir 0"
+value = "flag_and_zero"
+
+[[cleaning.outliers]]
+label = "Ne rien faire"
+value = "none"
+
+[[cleaning.outliers]]
+label = "Clip IQR (×1.5)"
+value = "clip_iqr"
+params = { factor = 1.5 }
+
+[[cleaning.outliers]]
+label = "Clip percentile 1%–99%"
+value = "clip_percentile"
+params = { lower_pct = 1, upper_pct = 99 }
+
+[[cleaning.outliers]]
+label = "Supprimer lignes — IQR"
+value = "drop_iqr"
+params = { factor = 1.5 }
+
+[[cleaning.outliers]]
+label = "Supprimer lignes — Z-score"
+value = "drop_zscore"
+params = { threshold = 3.0 }
+
+[[cleaning.outliers]]
+label = "Winsorize"
+value = "winsorize"
+params = { limits = [0.05, 0.05] }
+
+[[cleaning.outliers]]
+label = "Isolation Forest (flag)"
+value = "isolation_forest"
+params = { contamination = 0.05, random_state = 42 }
+
+[[cleaning.outliers]]
+label = "Local Outlier Factor (flag)"
+value = "lof"
+params = { n_neighbors = 20, contamination = 0.05 }
+
+[[cleaning.duplicates]]
+label = "Supprimer doublons exacts (keep first)"
+value = "drop_first"
+code = "df.drop_duplicates(keep='first', inplace=True)"
+
+[[cleaning.duplicates]]
+label = "Supprimer doublons exacts (keep last)"
+value = "drop_last"
+code = "df.drop_duplicates(keep='last', inplace=True)"
+
+[[cleaning.duplicates]]
+label = "Supprimer doublons exacts (tous)"
+value = "drop_all"
+code = "df.drop_duplicates(keep=False, inplace=True)"
+
+[[cleaning.duplicates]]
+label = "Flaguer colonne doublon"
+value = "flag"
+code = "df['is_duplicate'] = df.duplicated(keep='first').astype(int)"
+
+[[cleaning.type_cast]]
+label = "Cast int"
+value = "to_int"
+code = "df[col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')"
+
+[[cleaning.type_cast]]
+label = "Cast float"
+value = "to_float"
+code = "df[col] = pd.to_numeric(df[col], errors='coerce').astype(float)"
+
+[[cleaning.type_cast]]
+label = "Cast string"
+value = "to_str"
+code = "df[col] = df[col].astype(str)"
+
+[[cleaning.type_cast]]
+label = "Cast datetime"
+value = "to_datetime"
+code = "df[col] = pd.to_datetime(df[col], errors='coerce')"
+
+[[cleaning.type_cast]]
+label = "Cast category"
+value = "to_category"
+code = "df[col] = df[col].astype('category')"
+
+[[cleaning.type_cast]]
+label = "Cast bool"
+value = "to_bool"
+code = "df[col] = df[col].astype(bool)"
+
+[[cleaning.text]]
+label = "Minuscules"
+value = "lowercase"
+code = "df[col] = df[col].str.lower()"
+
+[[cleaning.text]]
+label = "Supprimer espaces"
+value = "strip"
+code = "df[col] = df[col].str.strip()"
+
+[[cleaning.text]]
+label = "Supprimer spéciaux"
+value = "remove_special"
+code = "df[col] = df[col].str.replace(r'[^\\w\\s]', '', regex=True)"
+
+[[cleaning.text]]
+label = "Supprimer chiffres"
+value = "remove_digits"
+code = "df[col] = df[col].str.replace(r'\\d+', '', regex=True)"
+
+[[cleaning.text]]
+label = "Espaces multiples"
+value = "remove_extra_spaces"
+code = "df[col] = df[col].str.replace(r'\\s+', ' ', regex=True).str.strip()"
+
+# ---------------------------------------------------------------------------
+# ÉTAPE 6 — ENCODING
+# ---------------------------------------------------------------------------
+[encoding]
+max_cardinality_warning = 500
+
+[[encoding.tabular.numeric]]
+label = "Passthrough"
+value = "none"
+
+[[encoding.tabular.numeric]]
+label = "Standardisation (Z-score)"
+value = "std"
+module = "sklearn.preprocessing"
+class_name = "StandardScaler"
+params = {}
+
+[[encoding.tabular.numeric]]
+label = "Min-Max [0,1]"
+value = "minmax"
+module = "sklearn.preprocessing"
+class_name = "MinMaxScaler"
+params = { feature_range = [0, 1] }
+
+[[encoding.tabular.numeric]]
+label = "Robust Scaler (median/IQR)"
+value = "robust"
+module = "sklearn.preprocessing"
+class_name = "RobustScaler"
+params = {}
+
+[[encoding.tabular.numeric]]
+label = "MaxAbs Scaler [-1,1]"
+value = "maxabs"
+module = "sklearn.preprocessing"
+class_name = "MaxAbsScaler"
+params = {}
+
+[[encoding.tabular.numeric]]
+label = "Power Transform (Yeo-Johnson)"
+value = "power_yeo"
+module = "sklearn.preprocessing"
+class_name = "PowerTransformer"
+params = { method = "yeo-johnson" }
+
+[[encoding.tabular.numeric]]
+label = "Power Transform (Box-Cox)"
+value = "power_boxcox"
+module = "sklearn.preprocessing"
+class_name = "PowerTransformer"
+params = { method = "box-cox" }
+
+[[encoding.tabular.numeric]]
+label = "Quantile Transform (uniforme)"
+value = "quantile_uniform"
+module = "sklearn.preprocessing"
+class_name = "QuantileTransformer"
+params = { n_quantiles = 1000, output_distribution = "uniform" }
+
+[[encoding.tabular.numeric]]
+label = "Quantile Transform (normal)"
+value = "quantile_normal"
+module = "sklearn.preprocessing"
+class_name = "QuantileTransformer"
+params = { n_quantiles = 1000, output_distribution = "normal" }
+
+[[encoding.tabular.numeric]]
+label = "Log1p"
+value = "log1p"
+code = """import numpy as np
+df[col] = np.log1p(df[col])"""
+
+[[encoding.tabular.numeric]]
+label = "Racine carrée"
+value = "sqrt"
+code = """import numpy as np
+df[col] = np.sqrt(df[col].clip(0))"""
+
+[[encoding.tabular.numeric]]
+label = "Normalizer L1 (par ligne)"
+value = "normalizer_l1"
+module = "sklearn.preprocessing"
+class_name = "Normalizer"
+params = { norm = "l1" }
+
+[[encoding.tabular.numeric]]
+label = "Normalizer L2 (par ligne)"
+value = "normalizer_l2"
+module = "sklearn.preprocessing"
+class_name = "Normalizer"
+params = { norm = "l2" }
+
+[[encoding.tabular.numeric]]
+label = "Binarize"
+value = "binarize"
+module = "sklearn.preprocessing"
+class_name = "Binarizer"
+params = { threshold = 0.0 }
+
+[[encoding.tabular.numeric]]
+label = "Polynomial Features (degré 2)"
+value = "poly2"
+module = "sklearn.preprocessing"
+class_name = "PolynomialFeatures"
+params = { degree = 2, include_bias = false }
+
+[[encoding.tabular.numeric]]
+label = "Supprimer colonne"
+value = "drop"
+code = "df.drop(columns=[col], inplace=True)"
+
+[[encoding.tabular.categorical]]
+label = "One-Hot (pandas)"
+value = "onehot_pandas"
+code = "df = pd.get_dummies(df, columns=[col], prefix=col, drop_first=false)"
+
+[[encoding.tabular.categorical]]
+label = "One-Hot (sklearn)"
+value = "onehot_sklearn"
+module = "sklearn.preprocessing"
+class_name = "OneHotEncoder"
+params = { drop = "null", sparse_output = false, handle_unknown = "ignore" }
+
+[[encoding.tabular.categorical]]
+label = "Label Encoding"
+value = "label"
+module = "sklearn.preprocessing"
+class_name = "LabelEncoder"
+params = {}
+
+[[encoding.tabular.categorical]]
+label = "Ordinal Encoding"
+value = "ordinal"
+module = "sklearn.preprocessing"
+class_name = "OrdinalEncoder"
+params = { handle_unknown = "use_encoded_value", unknown_value = -1 }
+
+[[encoding.tabular.categorical]]
+label = "Target Encoding"
+value = "target"
+module = "category_encoders"
+class_name = "TargetEncoder"
+params = { smoothing = 1.0 }
+
+[[encoding.tabular.categorical]]
+label = "Frequency Encoding"
+value = "freq"
+code = """freq = df[col].value_counts(normalize=True)
+df[col] = df[col].map(freq)"""
+
+[[encoding.tabular.categorical]]
+label = "Count Encoding"
+value = "count"
+code = """cnt = df[col].value_counts()
+df[col] = df[col].map(cnt)"""
+
+[[encoding.tabular.categorical]]
+label = "Binary Encoding"
+value = "binary"
+module = "category_encoders"
+class_name = "BinaryEncoder"
+params = {}
+
+[[encoding.tabular.categorical]]
+label = "BaseN Encoding"
+value = "basen"
+module = "category_encoders"
+class_name = "BaseNEncoder"
+params = { base = 2 }
+
+[[encoding.tabular.categorical]]
+label = "Hashing Encoding"
+value = "hashing"
+module = "category_encoders"
+class_name = "HashingEncoder"
+params = { n_components = 8 }
+
+[[encoding.tabular.categorical]]
+label = "Leave-One-Out Encoding"
+value = "loo"
+module = "category_encoders"
+class_name = "LeaveOneOutEncoder"
+params = {}
+
+[[encoding.tabular.categorical]]
+label = "Supprimer colonne"
+value = "drop"
+code = "df.drop(columns=[col], inplace=True)"
+
+[[encoding.tabular.binary]]
+label = "Label Encoding (0/1)"
+value = "label"
+module = "sklearn.preprocessing"
+class_name = "LabelEncoder"
+params = {}
+
+[[encoding.tabular.binary]]
+label = "Map True/False → 1/0"
+value = "bool_map"
+code = "df[col] = df[col].map({True: 1, False: 0, 'True': 1, 'False': 0, 'yes': 1, 'no': 0}).fillna(0).astype(int)"
+
+[[encoding.tabular.binary]]
+label = "Supprimer colonne"
+value = "drop"
+code = "df.drop(columns=[col], inplace=True)"
+
+[[encoding.tabular.datetime]]
+label = "Extraire Année / Mois / Jour"
+value = "extract_ymd"
+code = """df[col+'_year']=df[col].dt.year
+df[col+'_month']=df[col].dt.month
+df[col+'_day']=df[col].dt.day
+df.drop(columns=[col],inplace=True)"""
+
+[[encoding.tabular.datetime]]
+label = "Extraire toutes features date"
+value = "extract_full"
+code = """df[col+'_year']=df[col].dt.year
+df[col+'_month']=df[col].dt.month
+df[col+'_day']=df[col].dt.day
+df[col+'_dow']=df[col].dt.dayofweek
+df[col+'_hour']=df[col].dt.hour
+df[col+'_is_weekend']=(df[col].dt.dayofweek>=5).astype(int)
+df.drop(columns=[col],inplace=True)"""
+
+[[encoding.tabular.datetime]]
+label = "Epoch (Unix timestamp)"
+value = "epoch"
+code = "df[col] = df[col].astype('int64') // 10**9"
+
+[[encoding.tabular.datetime]]
+label = "Encodage cyclique sin/cos (mois)"
+value = "cyclical_month"
+code = """import numpy as np
+df[col+'_sin']=np.sin(2*np.pi*df[col].dt.month/12)
+df[col+'_cos']=np.cos(2*np.pi*df[col].dt.month/12)
+df.drop(columns=[col],inplace=True)"""
+
+[[encoding.tabular.datetime]]
+label = "Supprimer colonne"
+value = "drop"
+code = "df.drop(columns=[col], inplace=True)"
+
+[[encoding.tabular.text]]
+label = "TF-IDF (50 features)"
+value = "tfidf_50"
+module = "sklearn.feature_extraction.text"
+class_name = "TfidfVectorizer"
+params = { max_features = 50, ngram_range = [1, 1], min_df = 1 }
+
+[[encoding.tabular.text]]
+label = "TF-IDF (100 features)"
+value = "tfidf_100"
+module = "sklearn.feature_extraction.text"
+class_name = "TfidfVectorizer"
+params = { max_features = 100, ngram_range = [1, 2], min_df = 1 }
+
+[[encoding.tabular.text]]
+label = "Count Vectorizer (BoW)"
+value = "bow"
+module = "sklearn.feature_extraction.text"
+class_name = "CountVectorizer"
+params = { max_features = 100, ngram_range = [1, 1] }
+
+[[encoding.tabular.text]]
+label = "Hashing Vectorizer"
+value = "hashing_vec"
+module = "sklearn.feature_extraction.text"
+class_name = "HashingVectorizer"
+params = { n_features = 64 }
+
+[[encoding.tabular.text]]
+label = "Sentence Embeddings"
+value = "sentence_embed"
+module = "sentence_transformers"
+class_name = "SentenceTransformer"
+params = { model_name_or_path = "all-MiniLM-L6-v2" }
+
+[[encoding.tabular.text]]
+label = "Supprimer colonne"
+value = "drop"
+code = "df.drop(columns=[col], inplace=True)"
+
+[[encoding.tabular.id_like]]
+label = "Supprimer (recommandé)"
+value = "drop"
+code = "df.drop(columns=[col], inplace=True)"
+
+[[encoding.tabular.id_like]]
+label = "Label Encoding (si clé utile)"
+value = "label"
+module = "sklearn.preprocessing"
+class_name = "LabelEncoder"
+params = {}
+
+[[encoding.tabular.id_like]]
+label = "Passthrough"
+value = "none"
+
+[[encoding.non_tabular.image]]
+label = "Aplatir (→ 1D)"
+value = "flatten"
+
+[[encoding.non_tabular.image]]
+label = "Normaliser pixels [0,1]"
+value = "normalize_01"
+
+[[encoding.non_tabular.image]]
+label = "Resize + normaliser"
+value = "resize_normalize"
+params = { size = [224, 224] }
+
+[[encoding.non_tabular.image]]
+label = "Niveaux de gris + aplatir"
+value = "gray_flatten"
+params = { size = [64, 64] }
+
+[[encoding.non_tabular.image]]
+label = "Extraction features ResNet50"
+value = "resnet50_features"
+
+[[encoding.non_tabular.image]]
+label = "Supprimer"
+value = "drop"
+
+[[encoding.non_tabular.text]]
+label = "TF-IDF (50 features)"
+value = "tfidf_50"
+params = { max_features = 50 }
+
+[[encoding.non_tabular.text]]
+label = "TF-IDF (100 features)"
+value = "tfidf_100"
+params = { max_features = 100 }
+
+[[encoding.non_tabular.text]]
+label = "Sentence Embeddings"
+value = "sentence_embed"
+params = { model_name = "all-MiniLM-L6-v2" }
+
+[[encoding.non_tabular.text]]
+label = "Supprimer"
+value = "drop"
+
+[[encoding.non_tabular.graph]]
+label = "Features nœuds (degré, centralité)"
+value = "node_features"
+
+[[encoding.non_tabular.graph]]
+label = "Matrice d'adjacence (dense)"
+value = "adjacency_dense"
+
+[[encoding.non_tabular.graph]]
+label = "Supprimer"
+value = "drop"
+
+[[encoding.non_tabular.timeseries]]
+label = "Features retardées (lags)"
+value = "lag_features"
+params = { lags = [1, 2, 3], target_col = "value" }
+
+[[encoding.non_tabular.timeseries]]
+label = "Moyennes mobiles"
+value = "rolling_mean"
+params = { windows = [3, 7, 14], target_col = "value" }
+
+[[encoding.non_tabular.timeseries]]
+label = "Décomposition STL"
+value = "stl_decompose"
+params = { target_col = "value", period = 12 }
+
+[[encoding.non_tabular.timeseries]]
+label = "Passthrough"
+value = "none"
+
+[[encoding.non_tabular.ontology]]
+label = "Extraire Classes"
+value = "extract_classes"
+
+[[encoding.non_tabular.ontology]]
+label = "Extraire Object Properties"
+value = "extract_object_props"
+
+[[encoding.non_tabular.ontology]]
+label = "Extraire Datatype Properties"
+value = "extract_data_props"
+
+[[encoding.non_tabular.ontology]]
+label = "Convertir en graphe NetworkX"
+value = "to_networkx"
+
+[[encoding.non_tabular.ontology]]
+label = "Supprimer"
+value = "drop"
+
+[[encoding.non_tabular.unknown]]
+label = "Supprimer"
+value = "drop"
+
+[[encoding.non_tabular.unknown]]
+label = "Passthrough"
+value = "none"
+
+# ---------------------------------------------------------------------------
+# ÉTAPE 7 — SELECTION (feature selection)
+# ---------------------------------------------------------------------------
+[[selection.methods]]
+label = "Variance Threshold"
+value = "variance_threshold"
+params = { threshold = 0.0 }
+
+[[selection.methods]]
+label = "SelectKBest (f_classif)"
+value = "selectkbest_f"
+params = { k = 10 }
+
+[[selection.methods]]
+label = "SelectKBest (mutual_info)"
+value = "selectkbest_mi"
+params = { k = 10 }
+
+[[selection.methods]]
+label = "Corrélation Pearson (seuil)"
+value = "corr_threshold"
+params = { threshold = 0.95 }
+
+[[selection.methods]]
+label = "RFE (RandomForest)"
+value = "rfe_rf"
+params = { n_features_to_select = 10 }
+
+[[selection.methods]]
+label = "PCA"
+value = "pca"
+params = { n_components = 10, random_state = 42 }
+
+[[selection.methods]]
+label = "UMAP (2D)"
+value = "umap"
+params = { n_components = 2, n_neighbors = 15, random_state = 42 }
+
+# ---------------------------------------------------------------------------
+# ÉTAPE 8 — SPLIT (inclut balancing)
+# ---------------------------------------------------------------------------
+[split.defaults]
+test_size = 0.2
+val_size = 0.1
+random_state = 42
+stratify = true
+
+[[split.strategies]]
+label = "Split aléatoire"
+value = "random"
+
+[[split.strategies]]
+label = "Split stratifié"
+value = "stratified"
+
+[[split.strategies]]
+label = "Split temporel/séquentiel"
+value = "sequential"
+
+[split.balancing]
+imbalance_threshold = 10
+
+[[split.balancing.methods]]
+label = "Aucun"
+value = "none"
+
+[[split.balancing.methods]]
+label = "Poids de classe (niveau modèle)"
+value = "class_weights"
+
+[[split.balancing.methods]]
+label = "Oversampling (imbalanced-learn)"
+value = "oversample"
+
+[[split.balancing.methods]]
+label = "Undersampling (imbalanced-learn)"
+value = "undersample"
+
+[[split.balancing.methods]]
+label = "SMOTE"
+value = "smote"
+
+[[split.balancing.methods]]
+label = "ADASYN"
+value = "adasyn"
+
+[[split.balancing.methods]]
+label = "Random Over Sampler"
+value = "random_over"
+
+[[split.balancing.methods]]
+label = "Random Under Sampler"
+value = "random_under"
+
+# ---------------------------------------------------------------------------
+# ÉTAPE 9 — MODELING
+# ---------------------------------------------------------------------------
+[modeling]
+task_types = ["binary", "multiclass", "regression", "clustering"]
+
+[[modeling.classification.binary]]
+name = "Logistic Regression"
+class_name = "LogisticRegression"
+module = "sklearn.linear_model"
+params = { max_iter = 1000, C = 1.0, solver = "lbfgs" }
+
+[[modeling.classification.binary]]
+name = "Random Forest"
+class_name = "RandomForestClassifier"
+module = "sklearn.ensemble"
+params = { n_estimators = 200, max_depth = "null", random_state = 42 }
+
+[[modeling.classification.binary]]
+name = "Gradient Boosting (sklearn)"
+class_name = "GradientBoostingClassifier"
+module = "sklearn.ensemble"
+params = { n_estimators = 200, learning_rate = 0.1, max_depth = 3 }
+
+[[modeling.classification.binary]]
+name = "XGBoost"
+class_name = "XGBClassifier"
+module = "xgboost"
+params = { n_estimators = 200, learning_rate = 0.1, eval_metric = "logloss" }
+
+[[modeling.classification.binary]]
+name = "LightGBM"
+class_name = "LGBMClassifier"
+module = "lightgbm"
+params = { n_estimators = 200, learning_rate = 0.05, num_leaves = 31 }
+
+[[modeling.classification.binary]]
+name = "CatBoost"
+class_name = "CatBoostClassifier"
+module = "catboost"
+params = { iterations = 200, learning_rate = 0.05, verbose = 0 }
+
+[[modeling.classification.binary]]
+name = "SVM (RBF)"
+class_name = "SVC"
+module = "sklearn.svm"
+params = { C = 1.0, kernel = "rbf", probability = true }
+
+[[modeling.classification.binary]]
+name = "K-Nearest Neighbors"
+class_name = "KNeighborsClassifier"
+module = "sklearn.neighbors"
+params = { n_neighbors = 5 }
+
+[[modeling.classification.binary]]
+name = "Naive Bayes (Gaussien)"
+class_name = "GaussianNB"
+module = "sklearn.naive_bayes"
+params = {}
+
+[[modeling.classification.binary]]
+name = "AdaBoost"
+class_name = "AdaBoostClassifier"
+module = "sklearn.ensemble"
+params = { n_estimators = 100, learning_rate = 0.5 }
+
+[[modeling.classification.binary]]
+name = "MLP Neural Network"
+class_name = "MLPClassifier"
+module = "sklearn.neural_network"
+params = { hidden_layer_sizes = [100, 50], max_iter = 300, random_state = 42 }
+
+[[modeling.classification.multiclass]]
+name = "Random Forest"
+class_name = "RandomForestClassifier"
+module = "sklearn.ensemble"
+params = { n_estimators = 200, random_state = 42 }
+
+[[modeling.classification.multiclass]]
+name = "XGBoost (multiclass)"
+class_name = "XGBClassifier"
+module = "xgboost"
+params = { n_estimators = 200, objective = "multi:softprob", eval_metric = "mlogloss" }
+
+[[modeling.classification.multiclass]]
+name = "LightGBM (multiclass)"
+class_name = "LGBMClassifier"
+module = "lightgbm"
+params = { n_estimators = 200, objective = "multiclass" }
+
+[[modeling.regression.continuous]]
+name = "Régression Linéaire"
+class_name = "LinearRegression"
+module = "sklearn.linear_model"
+params = {}
+
+[[modeling.regression.continuous]]
+name = "Ridge"
+class_name = "Ridge"
+module = "sklearn.linear_model"
+params = { alpha = 1.0 }
+
+[[modeling.regression.continuous]]
+name = "Lasso"
+class_name = "Lasso"
+module = "sklearn.linear_model"
+params = { alpha = 1.0, max_iter = 1000 }
+
+[[modeling.regression.continuous]]
+name = "ElasticNet"
+class_name = "ElasticNet"
+module = "sklearn.linear_model"
+params = { alpha = 1.0, l1_ratio = 0.5, max_iter = 1000 }
+
+[[modeling.regression.continuous]]
+name = "Random Forest Regressor"
+class_name = "RandomForestRegressor"
+module = "sklearn.ensemble"
+params = { n_estimators = 200, random_state = 42 }
+
+[[modeling.regression.continuous]]
+name = "Gradient Boosting Regressor"
+class_name = "GradientBoostingRegressor"
+module = "sklearn.ensemble"
+params = { n_estimators = 200, learning_rate = 0.1, max_depth = 3 }
+
+[[modeling.regression.continuous]]
+name = "XGBoost Regressor"
+class_name = "XGBRegressor"
+module = "xgboost"
+params = { n_estimators = 200, learning_rate = 0.1 }
+
+[[modeling.regression.continuous]]
+name = "LightGBM Regressor"
+class_name = "LGBMRegressor"
+module = "lightgbm"
+params = { n_estimators = 200, learning_rate = 0.05 }
+
+[[modeling.regression.continuous]]
+name = "SVR (RBF)"
+class_name = "SVR"
+module = "sklearn.svm"
+params = { C = 1.0, kernel = "rbf" }
+
+[[modeling.regression.continuous]]
+name = "MLP Regressor"
+class_name = "MLPRegressor"
+module = "sklearn.neural_network"
+params = { hidden_layer_sizes = [100, 50], max_iter = 300, random_state = 42 }
+
+[[modeling.clustering]]
+name = "K-Means"
+class_name = "KMeans"
+module = "sklearn.cluster"
+params = { n_clusters = 8, random_state = 42, n_init = "auto" }
+
+[[modeling.clustering]]
+name = "DBSCAN"
+class_name = "DBSCAN"
+module = "sklearn.cluster"
+params = { eps = 0.5, min_samples = 5 }
+
+[[modeling.clustering]]
+name = "Agglomerative Clustering"
+class_name = "AgglomerativeClustering"
+module = "sklearn.cluster"
+params = { n_clusters = 8, linkage = "ward" }
+
+# ---------------------------------------------------------------------------
+# ÉTAPE 10 — METRICS
+# ---------------------------------------------------------------------------
+[[metrics.classification.binary]]
+name = "Accuracy"
+func = "accuracy_score"
+module = "sklearn.metrics"
+
+[[metrics.classification.binary]]
+name = "ROC-AUC"
+func = "roc_auc_score"
+module = "sklearn.metrics"
+
+[[metrics.classification.binary]]
+name = "F1 (binary)"
+func = "f1_score"
+module = "sklearn.metrics"
+kwargs = { average = "binary" }
+
+[[metrics.classification.binary]]
+name = "Precision"
+func = "precision_score"
+module = "sklearn.metrics"
+
+[[metrics.classification.binary]]
+name = "Recall"
+func = "recall_score"
+module = "sklearn.metrics"
+
+[[metrics.classification.binary]]
+name = "Log Loss"
+func = "log_loss"
+module = "sklearn.metrics"
+
+[[metrics.classification.binary]]
+name = "Matthews Correlation Coeff."
+func = "matthews_corrcoef"
+module = "sklearn.metrics"
+
+[[metrics.classification.multiclass]]
+name = "Accuracy"
+func = "accuracy_score"
+module = "sklearn.metrics"
+
+[[metrics.classification.multiclass]]
+name = "F1 (macro)"
+func = "f1_score"
+module = "sklearn.metrics"
+kwargs = { average = "macro" }
+
+[[metrics.classification.multiclass]]
+name = "F1 (weighted)"
+func = "f1_score"
+module = "sklearn.metrics"
+kwargs = { average = "weighted" }
+
+[[metrics.regression]]
+name = "R²"
+func = "r2_score"
+module = "sklearn.metrics"
+
+[[metrics.regression]]
+name = "MAE"
+func = "mean_absolute_error"
+module = "sklearn.metrics"
+
+[[metrics.regression]]
+name = "MSE"
+func = "mean_squared_error"
+module = "sklearn.metrics"
+
+[[metrics.regression]]
+name = "RMSE"
+func = "mean_squared_error"
+module = "sklearn.metrics"
+post = "np.sqrt"
+
+[[metrics.regression]]
+name = "MAPE"
+func = "mean_absolute_percentage_error"
+module = "sklearn.metrics"
+
+metrics.clustering = ["silhouette", "calinski_harabasz", "davies_bouldin"]
+
+# ---------------------------------------------------------------------------
+# ÉTAPE 11 — OPTIMIZATION (HPO)
+# ---------------------------------------------------------------------------
+[optimization.defaults]
+method = "randomized"
+cv_folds = 5
+n_iter = 20
+n_trials = 100
+max_duration_seconds = 3600
+
+[optimization.defaults.scoring]
+classification_binary = "roc_auc"
+classification_multiclass = "f1_macro"
+regression = "r2"
+
+[[optimization.methods]]
+label = "RandomizedSearchCV (recommandé)"
+value = "randomized"
+
+[[optimization.methods]]
+label = "GridSearchCV (exhaustif)"
+value = "grid"
+
+[[optimization.methods]]
+label = "Bayesian (Optuna)"
+value = "bayesian"
+
+[optimization.search_spaces]
+
+[optimization.search_spaces.LogisticRegression]
+C = { dist = "uniform", loc = 0.01, scale = 10 }
+solver = ["lbfgs", "saga"]
+max_iter = [500, 1000, 2000]
+
+[optimization.search_spaces.RandomForestClassifier]
+n_estimators = { dist = "randint", low = 50, high = 400 }
+max_depth = ["null", 5, 10, 15, 20]
+min_samples_split = { dist = "randint", low = 2, high = 15 }
+min_samples_leaf = { dist = "randint", low = 1, high = 8 }
+max_features = ["sqrt", "log2", 0.5]
+
+[optimization.search_spaces.RandomForestRegressor]
+n_estimators = { dist = "randint", low = 50, high = 400 }
+max_depth = ["null", 5, 10, 15, 20]
+min_samples_split = { dist = "randint", low = 2, high = 15 }
+min_samples_leaf = { dist = "randint", low = 1, high = 8 }
+max_features = ["sqrt", "log2", 0.5]
+
+[optimization.search_spaces.XGBClassifier]
+n_estimators = { dist = "randint", low = 50, high = 400 }
+learning_rate = { dist = "uniform", loc = 0.01, scale = 0.3 }
+max_depth = { dist = "randint", low = 3, high = 10 }
+subsample = { dist = "uniform", loc = 0.5, scale = 0.5 }
+colsample_bytree = { dist = "uniform", loc = 0.5, scale = 0.5 }
+
+[optimization.search_spaces.XGBRegressor]
+n_estimators = { dist = "randint", low = 50, high = 400 }
+learning_rate = { dist = "uniform", loc = 0.01, scale = 0.3 }
+max_depth = { dist = "randint", low = 3, high = 10 }
+subsample = { dist = "uniform", loc = 0.5, scale = 0.5 }
+colsample_bytree = { dist = "uniform", loc = 0.5, scale = 0.5 }
+
+[optimization.search_spaces.LGBMClassifier]
+n_estimators = { dist = "randint", low = 50, high = 400 }
+learning_rate = { dist = "uniform", loc = 0.01, scale = 0.3 }
+num_leaves = { dist = "randint", low = 15, high = 128 }
+max_depth = [-1, 5, 10, 15]
+
+[optimization.search_spaces.LGBMRegressor]
+n_estimators = { dist = "randint", low = 50, high = 400 }
+learning_rate = { dist = "uniform", loc = 0.01, scale = 0.3 }
+num_leaves = { dist = "randint", low = 15, high = 128 }
+max_depth = [-1, 5, 10, 15]
+
+[optimization.search_spaces.CatBoostClassifier]
+iterations = { dist = "randint", low = 50, high = 400 }
+learning_rate = { dist = "uniform", loc = 0.01, scale = 0.3 }
+depth = { dist = "randint", low = 3, high = 10 }
+l2_leaf_reg = { dist = "uniform", loc = 1, scale = 9 }
+
+[optimization.search_spaces.Ridge]
+alpha = { dist = "uniform", loc = 0.001, scale = 100 }
+solver = ["auto", "svd", "cholesky", "lsqr"]
+
+[optimization.search_spaces.Lasso]
+alpha = { dist = "uniform", loc = 0.001, scale = 10 }
+max_iter = [1000, 2000, 5000]
+
+[optimization.search_spaces.ElasticNet]
+alpha = { dist = "uniform", loc = 0.001, scale = 10 }
+l1_ratio = { dist = "uniform", loc = 0.05, scale = 0.9 }
+
+[optimization.search_spaces.SVC]
+C = { dist = "uniform", loc = 0.01, scale = 100 }
+kernel = ["rbf", "poly", "sigmoid"]
+gamma = ["scale", "auto"]
+
+[optimization.search_spaces.SVR]
+C = { dist = "uniform", loc = 0.01, scale = 100 }
+kernel = ["rbf", "poly"]
+gamma = ["scale", "auto"]
+epsilon = { dist = "uniform", loc = 0.01, scale = 1.0 }
+
+[optimization.search_spaces.MLPClassifier]
+hidden_layer_sizes = [[50], [100], [100, 50], [100, 100], [200, 100]]
+alpha = { dist = "uniform", loc = 0.0001, scale = 0.1 }
+learning_rate = ["constant", "adaptive"]
+
+[optimization.search_spaces.MLPRegressor]
+hidden_layer_sizes = [[50], [100], [100, 50], [100, 100], [200, 100]]
+alpha = { dist = "uniform", loc = 0.0001, scale = 0.1 }
+learning_rate = ["constant", "adaptive"]
+
+[optimization.search_spaces.AdaBoostClassifier]
+n_estimators = { dist = "randint", low = 30, high = 200 }
+learning_rate = { dist = "uniform", loc = 0.01, scale = 1.5 }
+algorithm = ["SAMME", "SAMME.R"]
+
+[optimization.search_spaces.AdaBoostRegressor]
+n_estimators = { dist = "randint", low = 30, high = 200 }
+learning_rate = { dist = "uniform", loc = 0.01, scale = 1.5 }
+loss = ["linear", "square", "exponential"]
+
+# ---------------------------------------------------------------------------
+# ÉTAPE 12 — EXPLAIN (explicabilité)
+# ---------------------------------------------------------------------------
+[[explain.tabular]]
+name = "SHAP (Tree/Kernel)"
+value = "shap"
+
+[[explain.tabular]]
+name = "LIME (Tabulaire)"
+value = "lime"
+
+[[explain.image]]
+name = "Grad-CAM"
+value = "gradcam"
+
+[[explain.image]]
+name = "Integrated Gradients"
+value = "intgrad"
+
+[[explain.text]]
+name = "LIME (Texte)"
+value = "lime_text"
+
+[[explain.text]]
+name = "SHAP (Texte)"
+value = "shap_text"
+
+[[explain.graph]]
+name = "GNNExplainer"
+value = "gnnexplainer"
+params = { epochs = 200 }
+
+[[explain.ontology]]
+name = "Justification (arbres de preuve)"
+value = "proof_trees"
+
+[[explain.ontology]]
+name = "Neuro-Symbolic Attention"
+value = "neuro_symbolic_attention"
+
+# ---------------------------------------------------------------------------
+# ÉTAPE 13 — EXPORT
+# ---------------------------------------------------------------------------
+[export]
+model_format = "joblib"
+
+[export.outputs]
+submission = "submission.csv"
+report = "execution_report.html"
+script = "exported_pipeline.py"
+models = "trained_models.pkl"
+
+# ---------------------------------------------------------------------------
+# UI — Thème, palette, options d'affichage
+# ---------------------------------------------------------------------------
+[ui.theme]
+primary_color = "#6d28d9"
+success_color = "#16a34a"
+warning_color = "#f59e0b"
+danger_color = "#ef4444"
+info_color = "#3b82f6"
+border_color = "#e2e8f0"
+bg_color = "#f8fafc"
+
+[ui.display]
+max_lc_samples = 5000
+pd_max_columns = 50
+pd_float_format = "{:.4f}"
+
+ui.palette = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#8b5cf6", "#ec4899"]
+
+# ---------------------------------------------------------------------------
+# STYLES — CSS et palettes pour l'interface
+# (Partagé entre l'app web et les notebooks)
+# ---------------------------------------------------------------------------
+[styles.palette]
+error = "#c0392b"
+error_bg = "#fdecea"
+error_border = "#e74c3c"
+warning = "#d35400"
+warning_bg = "#fef9e7"
+warning_border = "#f39c12"
+info = "#1a5276"
+info_bg = "#eaf4fb"
+info_border = "#2980b9"
+success = "#1e8449"
+success_bg = "#eafaf1"
+success_border = "#27ae60"
+primary = "#2c3e50"
+secondary = "#7f8c8d"
+header_bg = "#2c3e50"
+header_text = "#ecf0f1"
+table_header_bg = "#34495e"
+table_row_even = "#f8f9fa"
+table_row_odd = "#ffffff"
+table_border = "#dee2e6"
+code_bg = "#f4f6f7"
+
+[styles.css]
+global = """
+/* ── ML Pipeline UI — global styles ─────────────────────────────────── */
+
+/* Message boxes */
+.mlp-msg {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 6px;
+    border-left: 4px solid;
+    margin: 6px 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 0.92em;
+    line-height: 1.5;
+}
+.mlp-msg-icon { font-size: 1.1em; flex-shrink: 0; margin-top: 1px; }
+.mlp-msg-body { flex: 1; }
+.mlp-msg-source {
+    font-weight: 600;
+    margin-right: 4px;
+}
+
+.mlp-error   { background: #fdecea; border-color: #e74c3c; color: #c0392b; }
+.mlp-warning { background: #fef9e7; border-color: #f39c12; color: #d35400; }
+.mlp-info    { background: #eaf4fb; border-color: #2980b9; color: #1a5276; }
+.mlp-success { background: #eafaf1; border-color: #27ae60; color: #1e8449; }
+
+/* Section header */
+.mlp-section {
+    background: #2c3e50;
+    color: #ecf0f1;
+    padding: 12px 18px;
+    border-radius: 6px;
+    margin: 12px 0 6px 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+.mlp-section h3 {
+    margin: 0 0 4px 0;
+    font-size: 1.1em;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+.mlp-section p {
+    margin: 0;
+    font-size: 0.88em;
+    opacity: 0.85;
+}
+
+/* Data preview table */
+.mlp-preview {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.82em;
+    margin: 6px 0;
+}
+.mlp-preview thead th {
+    background: #34495e;
+    color: #ecf0f1;
+    padding: 6px 10px;
+    text-align: left;
+    border: 1px solid #dee2e6;
+    white-space: nowrap;
+}
+.mlp-preview tbody tr:nth-child(even) { background: #f8f9fa; }
+.mlp-preview tbody tr:nth-child(odd)  { background: #ffffff; }
+.mlp-preview tbody td {
+    padding: 5px 10px;
+    border: 1px solid #dee2e6;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Comparison table */
+.mlp-comparison {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 0.88em;
+    margin: 6px 0;
+}
+.mlp-comparison thead th {
+    background: #34495e;
+    color: #ecf0f1;
+    padding: 8px 12px;
+    text-align: left;
+    border: 1px solid #dee2e6;
+}
+.mlp-comparison tbody tr:nth-child(even) { background: #f8f9fa; }
+.mlp-comparison tbody tr:nth-child(odd)  { background: #ffffff; }
+.mlp-comparison tbody td {
+    padding: 6px 12px;
+    border: 1px solid #dee2e6;
+}
+.mlp-comparison tbody td:first-child { font-weight: 600; }
+"""
+
+[styles.icons]
+error = "❌"
+warning = "⚠️"
+info = "ℹ️"
+success = "✅"

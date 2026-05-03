@@ -1,0 +1,7 @@
+# Voila + deps minimales pour lancer le dashboard
+# Les packages ML sont installés dynamiquement via la cellule S00 du notebook
+voila
+jupyter
+ipywidgets
+jinja2
+toml

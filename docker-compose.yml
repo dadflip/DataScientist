@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  # Dashboard Voilà
+  voila:
+    build: .
+    ports:
+      - "8866:8866"
+    volumes:
+      - ./outputs:/app/outputs
+    environment:
+      # Limites de threads pour sklearn/xgboost
+      - OMP_NUM_THREADS=4
+      - MKL_NUM_THREADS=4
+      - OPENBLAS_NUM_THREADS=4
+      - VECLIB_MAXIMUM_THREADS=4
+      - NUMEXPR_NUM_THREADS=4
+    deploy:
+      resources:
+        # Limite max pour éviter que le container ne consomme tout
+        limits:
+          cpus: '4'
+          memory: 8G
+        # Réservation minimale
+        reservations:
+          cpus: '2'
+          memory: 4G
+    # Redémarrage automatique en cas de crash OOM
+    restart: unless-stopped
+
+  # Optionnel : Redis pour cache/futures jobs
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  # Optionnel : Worker Celery pour calculs lourds
+  # Décommenter pour activer le mode "async"
+  # worker:
+  #   build: .
+  #   command: celery -A tasks worker --loglevel=info --concurrency=2
+  #   environment:
+  #     - CELERY_BROKER_URL=redis://redis:6379/0
+  #     - OMP_NUM_THREADS=4
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '4'
+  #         memory: 16G  # Plus de RAM pour le worker
+  #   depends_on:
+  #     - redis
+
+volumes:
+  redis_data:

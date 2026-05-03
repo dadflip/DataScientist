@@ -1,0 +1,11 @@
+{
+  "VoilaConfiguration": {
+    "enable_nbextensions": true,
+    "template": "classic",
+    "theme": "light"
+  },
+  "VoilaExecutor": {
+    "timeout": 600,
+    "iopub_timeout": 60
+  }
+}
