@@ -11,7 +11,7 @@ except ImportError:
         tomllib = None  # type: ignore
 
 
-def load_config(path: str | pathlib.Path = "config/default.toml") -> dict:
+def load_config(path: str | pathlib.Path = "default.toml") -> dict:
     """
     Charge le fichier TOML et retourne un dict.
     Fallback : si tomllib/tomli absent, utilise tomllib via subprocess pip install.
