@@ -946,23 +946,347 @@ class UltimateEDA:
             display(fig); plt.close(fig)
 
     def _build_ontology_ui(self, g) -> None:
-        out = widgets.Output()
-        self.dynamic_ui.children = [out]
-        with out:
-            print(f"Ontology  |  Triples: {len(g)}")
-            try:
-                from rdflib.namespace import OWL, RDF
-                classes   = list(g.subjects(RDF.type, OWL.Class))
-                props_obj = list(g.subjects(RDF.type, OWL.ObjectProperty))
-                props_dt  = list(g.subjects(RDF.type, OWL.DatatypeProperty))
-                inds      = list(g.subjects(RDF.type, OWL.NamedIndividual))
-                print(f"Classes: {len(classes)}  |  Object Properties: {len(props_obj)}  |  "
-                      f"Data Properties: {len(props_dt)}  |  Individuals: {len(inds)}")
-                print("\nSample Classes:")
-                for c in classes[:10]:
-                    print(" -", getattr(c, "n3", lambda: str(c))())
-            except Exception as e:
-                print("Could not analyze ontology structure:", e)
+        """EDA complète pour une ontologie RDF/OWL — onglets Stats, Graphe, Triplets, Namespaces, Hiérarchie."""
+        from IPython.display import display as _disp
+        eda_cfg = getattr(self.state, "config", {}).get("eda", {})
+        onto_cfg = eda_cfg.get("ontology", {})
+
+        # ── helpers ───────────────────────────────────────────────────────────
+        def _short(uri):
+            s = str(uri)
+            return s.split("#")[-1] if "#" in s else s.rsplit("/", 1)[-1]
+
+        def _ns(uri):
+            s = str(uri)
+            if "#" in s:
+                return s.rsplit("#", 1)[0] + "#"
+            parts = s.rsplit("/", 1)
+            return parts[0] + "/" if len(parts) > 1 else s
+
+        try:
+            from rdflib.namespace import OWL, RDF, RDFS
+        except ImportError:
+            self.dynamic_ui.children = [widgets.HTML(
+                "<div style='padding:12px;color:#b91c1c;'>rdflib non disponible.</div>")]
+            return
+
+        # ── collecte des stats ────────────────────────────────────────────────
+        n_triples  = len(g)
+        classes    = list(g.subjects(RDF.type, OWL.Class))
+        props_obj  = list(g.subjects(RDF.type, OWL.ObjectProperty))
+        props_dt   = list(g.subjects(RDF.type, OWL.DatatypeProperty))
+        props_ann  = list(g.subjects(RDF.type, OWL.AnnotationProperty))
+        inds       = list(g.subjects(RDF.type, OWL.NamedIndividual))
+        # Namespaces utilisés
+        from collections import Counter
+        ns_counter: Counter = Counter()
+        for s, p, o in g:
+            ns_counter[_ns(s)] += 1
+            ns_counter[_ns(p)] += 1
+        top_ns = ns_counter.most_common(20)
+
+        # ── Tab 0 : Stats récapitulatif ───────────────────────────────────────
+        stats_out = widgets.Output()
+        with stats_out:
+            # Tableau de synthèse
+            summary_rows = [
+                {"Élément": "Triples totaux",        "Nombre": n_triples},
+                {"Élément": "Classes OWL",            "Nombre": len(classes)},
+                {"Élément": "Object Properties",      "Nombre": len(props_obj)},
+                {"Élément": "Datatype Properties",    "Nombre": len(props_dt)},
+                {"Élément": "Annotation Properties",  "Nombre": len(props_ann)},
+                {"Élément": "Named Individuals",      "Nombre": len(inds)},
+                {"Élément": "Namespaces distincts",   "Nombre": len(ns_counter)},
+            ]
+            _disp(HTML("<b style='color:#374151;font-size:0.9em;'>Résumé de l'ontologie</b>"))
+            _disp(pd.DataFrame(summary_rows).set_index("Élément"))
+
+            # Tableau des classes
+            if classes:
+                _disp(HTML("<br><b style='color:#374151;font-size:0.9em;'>Classes (extrait)</b>"))
+                cls_rows = []
+                for c in classes[:50]:
+                    label_vals = list(g.objects(c, RDFS.label))
+                    lbl = str(label_vals[0]) if label_vals else ""
+                    n_sub = len(list(g.subjects(RDFS.subClassOf, c)))
+                    cls_rows.append({"IRI (court)": _short(c), "Label": lbl, "Sous-classes": n_sub})
+                _disp(pd.DataFrame(cls_rows))
+
+            # Tableau des propriétés
+            all_props = [(p, "Object") for p in props_obj] + [(p, "Datatype") for p in props_dt]
+            if all_props:
+                _disp(HTML("<br><b style='color:#374151;font-size:0.9em;'>Propriétés (extrait)</b>"))
+                prop_rows = []
+                for p, ptype in all_props[:40]:
+                    dom = list(g.objects(p, RDFS.domain))
+                    rng = list(g.objects(p, RDFS.range))
+                    prop_rows.append({
+                        "Propriété": _short(p), "Type": ptype,
+                        "Domain": _short(dom[0]) if dom else "",
+                        "Range":  _short(rng[0]) if rng else "",
+                    })
+                _disp(pd.DataFrame(prop_rows))
+
+        # ── Tab 1 : Graphe interactif avec densité ────────────────────────────
+        graph_out = widgets.Output()
+        default_density = int(onto_cfg.get("default_density", 40))
+        max_density     = int(onto_cfg.get("max_density", 200))
+        density_slider  = widgets.IntSlider(
+            value=default_density, min=5, max=max_density, step=5,
+            description="Densité (arêtes):",
+            style={"description_width": "initial"},
+            layout=widgets.Layout(width="380px"))
+        layout_dd = widgets.Dropdown(
+            options=onto_cfg.get("graph_layouts", ["spring", "kamada_kawai", "circular", "shell"]),
+            value="spring", description="Layout:",
+            layout=widgets.Layout(width="200px"))
+        rel_filter = widgets.SelectMultiple(
+            options=onto_cfg.get("relation_types",
+                                  ["subClassOf", "domain", "range", "type",
+                                   "subPropertyOf", "equivalentClass", "inverseOf"]),
+            value=onto_cfg.get("relation_types",
+                                ["subClassOf", "domain", "range", "type",
+                                 "subPropertyOf", "equivalentClass", "inverseOf"]),
+            description="Relations:",
+            rows=4, layout=widgets.Layout(width="260px"),
+            style={"description_width": "initial"})
+        plot_btn  = widgets.Button(description="Générer graphe", button_style=styles.BTN_PRIMARY,
+                                    layout=styles.LAYOUT_BTN_STD)
+        save_btn  = widgets.Button(description="Save Dashboard", button_style="info",
+                                    layout=styles.LAYOUT_BTN_STD)
+        self._last_onto_fig = None
+
+        def _plot_onto_graph(_=None):
+            with graph_out:
+                clear_output(wait=True)
+                try:
+                    import networkx as nx
+                    G = nx.DiGraph()
+                    allowed = set(rel_filter.value)
+                    max_edges = density_slider.value
+                    edges_added = 0
+                    for s, p, o in g:
+                        if edges_added >= max_edges:
+                            break
+                        ps = _short(p)
+                        if ps in allowed:
+                            ss, os_ = _short(s), _short(o)
+                            if ss and os_ and ss != os_:
+                                G.add_edge(ss, os_, label=ps)
+                                edges_added += 1
+                    if G.number_of_nodes() == 0:
+                        print("Aucune relation trouvée avec les filtres sélectionnés.")
+                        return
+                    fig, ax = plt.subplots(figsize=(12, 7))
+                    fig.patch.set_facecolor("#f8fafc"); ax.set_facecolor("#f8fafc")
+                    lay = layout_dd.value
+                    try:
+                        if lay == "kamada_kawai":
+                            pos = nx.kamada_kawai_layout(G)
+                        elif lay == "circular":
+                            pos = nx.circular_layout(G)
+                        elif lay == "shell":
+                            pos = nx.shell_layout(G)
+                        else:
+                            pos = nx.spring_layout(G, k=2.0, seed=42)
+                    except Exception:
+                        pos = nx.spring_layout(G, k=2.0, seed=42)
+                    # Couleurs par degré entrant/sortant
+                    node_colors = []
+                    for node in G.nodes():
+                        if G.in_degree(node) == 0:
+                            node_colors.append("#3b82f6")
+                        elif G.out_degree(node) == 0:
+                            node_colors.append("#10b981")
+                        else:
+                            node_colors.append("#8b5cf6")
+                    nx.draw_networkx_nodes(G, pos, node_color=node_colors,
+                                           node_size=500, alpha=0.88, ax=ax)
+                    nx.draw_networkx_labels(G, pos, font_size=7, font_color="white",
+                                            font_weight="bold", ax=ax)
+                    nx.draw_networkx_edges(G, pos, edge_color="#94a3b8",
+                                           arrows=True, arrowsize=14,
+                                           connectionstyle="arc3,rad=0.1", ax=ax)
+                    edge_labels = nx.get_edge_attributes(G, "label")
+                    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels,
+                                                  font_size=6, font_color="#475569", ax=ax)
+                    ax.set_title(
+                        f"Graphe ontologique — {G.number_of_nodes()} nœuds · {G.number_of_edges()} arêtes "
+                        f"(/{n_triples} triples) · layout={lay}",
+                        fontsize=9, color="#374151")
+                    ax.axis("off")
+                    # Légende
+                    from matplotlib.patches import Patch
+                    legend = [Patch(color="#3b82f6", label="Racines"),
+                              Patch(color="#8b5cf6", label="Intermédiaires"),
+                              Patch(color="#10b981", label="Feuilles")]
+                    ax.legend(handles=legend, loc="lower right", fontsize=7,
+                              framealpha=0.8, edgecolor="#e5e7eb")
+                    plt.tight_layout()
+                    _disp(fig)
+                    self._last_onto_fig = fig
+                    plt.close(fig)
+                except ImportError:
+                    print("networkx requis pour la visualisation du graphe.")
+                except Exception as e:
+                    print(f"Erreur graphe: {e}")
+
+        plot_btn.on_click(_plot_onto_graph)
+        save_btn.on_click(lambda b: self.dashboard.add(
+            self._last_onto_fig, f"Ontologie: graphe ({density_slider.value} arêtes)")
+            if self._last_onto_fig else None)
+
+        help_graph = styles.help_box(
+            "<b>Densité:</b> nombre max d'arêtes affichées. Réduire pour moins de bruit.<br>"
+            "<b>Relations:</b> filtrer les types de relations à visualiser.<br>"
+            "<b>Layout:</b> spring = force-directed, kamada_kawai = plus lisible pour petits graphes.", "#8b5cf6")
+        graph_tab = widgets.VBox([
+            help_graph,
+            widgets.HBox([density_slider, layout_dd],
+                          layout=widgets.Layout(gap="12px", align_items="center", margin="6px 0")),
+            widgets.HBox([rel_filter],
+                          layout=widgets.Layout(margin="4px 0 8px 0")),
+            widgets.HBox([plot_btn, save_btn],
+                          layout=widgets.Layout(gap="8px", align_items="center")),
+            graph_out])
+
+        # ── Tab 2 : Triplets filtrables ───────────────────────────────────────
+        max_rows_cfg = int(onto_cfg.get("max_triplets_display", 500))
+        pred_filter  = widgets.Dropdown(
+            options=["(tous)"] + sorted({_short(p) for _, p, _ in g}),
+            value="(tous)", description="Prédicat:",
+            layout=widgets.Layout(width="260px"),
+            style={"description_width": "initial"})
+        subj_filter  = widgets.Text(placeholder="Filtrer sujet (contient)...",
+                                     description="Sujet:",
+                                     layout=styles.LAYOUT_TEXT,
+                                     style={"description_width": "initial"})
+        filter_btn   = widgets.Button(description="Filtrer", button_style=styles.BTN_INFO,
+                                       layout=styles.LAYOUT_BTN_STD)
+        triplets_out = widgets.Output()
+
+        def _show_triplets(_=None):
+            with triplets_out:
+                clear_output(wait=True)
+                pred_sel = pred_filter.value
+                subj_sel = subj_filter.value.strip().lower()
+                rows = []
+                for s, p, o in g:
+                    ps = _short(p)
+                    if pred_sel != "(tous)" and ps != pred_sel:
+                        continue
+                    ss = _short(s)
+                    if subj_sel and subj_sel not in ss.lower():
+                        continue
+                    rows.append({"Subject": ss, "Predicate": ps,
+                                  "Object": _short(o)})
+                    if len(rows) >= max_rows_cfg:
+                        break
+                _disp(HTML(
+                    f"<div style='font-size:0.8em;color:#6b7280;margin-bottom:4px;'>"
+                    f"{len(rows)} triplets affichés (/{n_triples} total)</div>"))
+                _disp(pd.DataFrame(rows) if rows else HTML("<i>Aucun résultat.</i>"))
+
+        filter_btn.on_click(_show_triplets)
+        pred_filter.observe(lambda c: _show_triplets(), names="value")
+        _show_triplets()
+
+        triplets_tab = widgets.VBox([
+            widgets.HBox([pred_filter, subj_filter, filter_btn],
+                          layout=widgets.Layout(gap="10px", align_items="center", margin="6px 0")),
+            triplets_out])
+
+        # ── Tab 3 : Namespaces ────────────────────────────────────────────────
+        ns_out = widgets.Output()
+        with ns_out:
+            ns_rows = [{"Namespace": ns, "Occurrences": cnt} for ns, cnt in top_ns]
+            _disp(HTML("<b style='color:#374151;font-size:0.9em;'>Namespaces les plus utilisés</b>"))
+            _disp(pd.DataFrame(ns_rows))
+            # Barplot
+            if top_ns:
+                fig, ax = plt.subplots(figsize=(10, 4))
+                fig.patch.set_facecolor("#f8fafc"); ax.set_facecolor("#f8fafc")
+                labels = [ns.split("/")[-2] if ns.endswith("/") else ns.split("#")[0].rsplit("/", 1)[-1]
+                          for ns, _ in top_ns[:15]]
+                values = [cnt for _, cnt in top_ns[:15]]
+                ax.barh(labels[::-1], values[::-1], color="#3b82f6", alpha=0.8)
+                ax.set_title("Top namespaces par occurrences", fontsize=9)
+                ax.set_xlabel("Occurrences")
+                plt.tight_layout()
+                _disp(fig); plt.close(fig)
+
+        # ── Tab 4 : Hiérarchie de classes ─────────────────────────────────────
+        hier_out = widgets.Output()
+        max_hier = int(onto_cfg.get("max_hierarchy_nodes", 60))
+
+        def _build_hierarchy(_=None):
+            with hier_out:
+                clear_output(wait=True)
+                try:
+                    import networkx as nx
+                    H = nx.DiGraph()
+                    for s, p, o in g.triples((None, RDFS.subClassOf, None)):
+                        ss, os_ = _short(s), _short(o)
+                        if ss and os_ and ss != os_:
+                            H.add_edge(os_, ss)  # parent → enfant
+                        if H.number_of_nodes() >= max_hier:
+                            break
+                    if H.number_of_nodes() == 0:
+                        print("Aucune relation subClassOf trouvée.")
+                        return
+                    # Essayer un layout hiérarchique
+                    try:
+                        from networkx.drawing.nx_agraph import graphviz_layout
+                        pos = graphviz_layout(H, prog="dot")
+                    except Exception:
+                        pos = nx.spring_layout(H, k=2.5, seed=42)
+                    fig, ax = plt.subplots(figsize=(12, 7))
+                    fig.patch.set_facecolor("#f8fafc"); ax.set_facecolor("#f8fafc")
+                    roots = [n for n in H.nodes() if H.in_degree(n) == 0]
+                    leaves = [n for n in H.nodes() if H.out_degree(n) == 0]
+                    node_colors = [
+                        "#3b82f6" if n in roots else
+                        "#10b981" if n in leaves else "#8b5cf6"
+                        for n in H.nodes()
+                    ]
+                    nx.draw_networkx_nodes(H, pos, node_color=node_colors,
+                                           node_size=450, alpha=0.88, ax=ax)
+                    nx.draw_networkx_labels(H, pos, font_size=7, font_color="white",
+                                            font_weight="bold", ax=ax)
+                    nx.draw_networkx_edges(H, pos, edge_color="#94a3b8",
+                                           arrows=True, arrowsize=12, ax=ax)
+                    ax.set_title(
+                        f"Hiérarchie de classes (subClassOf) — {H.number_of_nodes()} classes",
+                        fontsize=9, color="#374151")
+                    ax.axis("off")
+                    from matplotlib.patches import Patch
+                    legend = [Patch(color="#3b82f6", label="Racines (Thing)"),
+                              Patch(color="#8b5cf6", label="Intermédiaires"),
+                              Patch(color="#10b981", label="Feuilles")]
+                    ax.legend(handles=legend, loc="lower right", fontsize=7, framealpha=0.8)
+                    plt.tight_layout()
+                    _disp(fig); plt.close(fig)
+                except ImportError:
+                    print("networkx requis.")
+                except Exception as e:
+                    print(f"Erreur hiérarchie: {e}")
+
+        hier_btn = widgets.Button(description="Générer hiérarchie", button_style=styles.BTN_PRIMARY,
+                                   layout=styles.LAYOUT_BTN_STD)
+        hier_btn.on_click(_build_hierarchy)
+        hier_tab = widgets.VBox([
+            styles.help_box(
+                f"Visualise la hiérarchie <b>subClassOf</b> (max {max_hier} nœuds). "
+                "Configurable via <code>eda.ontology.max_hierarchy_nodes</code>.", "#10b981"),
+            widgets.HBox([hier_btn], layout=widgets.Layout(margin="6px 0")),
+            hier_out])
+
+        # ── Assemblage des onglets ────────────────────────────────────────────
+        onto_tabs = widgets.Tab(children=[stats_out, graph_tab, triplets_tab, ns_out, hier_tab])
+        for i, title in enumerate(["Stats", "Graphe", "Triplets", "Namespaces", "Hiérarchie"]):
+            onto_tabs.set_title(i, title)
+
+        self.dynamic_ui.children = [onto_tabs]
 
     def _build_timeseries_ui(self, df: pd.DataFrame) -> None:
         if not isinstance(df, pd.DataFrame):

@@ -678,6 +678,9 @@ help = "Ligne utilisée comme en-tête"
 max_rows = 5
 sample_threshold = 100_000
 sample_size = 10_000
+onto_triplets_per_node = 3
+onto_max_source_nodes = 8
+onto_max_preview_rows = 50
 
 # ---------------------------------------------------------------------------
 # ÉTAPE 2 — DOMAINS
@@ -756,6 +759,14 @@ multivariate = ["Correlation Matrix", "Pairplot"]
 correlation_methods = ["pearson", "spearman", "kendall"]
 palettes = ["Set1", "Set2", "Set3", "viridis", "plasma", "coolwarm", "husl"]
 ts_plots = ["Line", "Scatter", "Area", "Box (par mois/année)", "Autocorrélation"]
+
+[eda.ontology]
+default_density = 40
+max_density = 200
+max_triplets_display = 500
+max_hierarchy_nodes = 60
+graph_layouts = ["spring", "kamada_kawai", "circular", "shell"]
+relation_types = ["subClassOf", "domain", "range", "type", "subPropertyOf", "equivalentClass", "inverseOf"]
 
 # ---------------------------------------------------------------------------
 # ÉTAPE 4 — FEATURE ENGINEERING

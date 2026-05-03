@@ -496,8 +496,13 @@ class DataLoaderUI:
                             except Exception:
                                 pass
                     elif src_type == "graph":
+                        import importlib, subprocess, sys as _sys
+                        global nx
                         if nx is None:
-                            raise ImportError("networkx not installed")
+                            print("   [graph] networkx absent → installation...")
+                            subprocess.check_call(
+                                [_sys.executable, "-m", "pip", "install", "networkx", "-q"])
+                            nx = importlib.import_module("networkx")
                         fmt_w = self._adv_widgets.get("format")
                         fmt   = fmt_w.value if fmt_w else "auto"
                         if fmt == "graphml" or (fmt == "auto" and path.endswith(".graphml")):
@@ -507,13 +512,25 @@ class DataLoaderUI:
                         else:
                             df = nx.read_edgelist(path)
                     elif src_type == "ontology":
+                        # Installation à la volée si absent (Kaggle, Colab, etc.)
+                        import importlib, subprocess, sys as _sys
+                        global rdflib
                         if rdflib is None:
-                            raise ImportError("rdflib not installed")
+                            print("   [ontology] rdflib absent → installation...")
+                            subprocess.check_call(
+                                [_sys.executable, "-m", "pip", "install", "rdflib", "-q"])
+                            rdflib = importlib.import_module("rdflib")
                         import io as _io, re as _re
                         try:
                             import owlready2 as _owlready2
                         except ImportError:
-                            _owlready2 = None
+                            try:
+                                print("   [ontology] owlready2 absent → installation...")
+                                subprocess.check_call(
+                                    [_sys.executable, "-m", "pip", "install", "owlready2", "-q"])
+                                import owlready2 as _owlready2
+                            except Exception:
+                                _owlready2 = None
 
                         fmt_w    = self._adv_widgets.get("format")
                         store_w  = self._adv_widgets.get("store")
@@ -1001,9 +1018,28 @@ class DataLoaderUI:
                                                layout=widgets.Layout(width="90px", height="28px"))
                     status    = widgets.HTML("")
 
-                    def _on_dd(change, txt=remap_txt):
-                        txt.layout.display = "flex" if change["new"] == "(saisir...)" else "none"
-                    remap_dd.observe(_on_dd, names="value")
+                    test_btn  = widgets.Button(description="Tester URL", button_style="",
+                                               layout=widgets.Layout(width="90px", height="28px",
+                                                                      display="none"))
+                    def _on_dd2(change, txt=remap_txt, tb=test_btn):
+                        is_custom = change["new"] == "(saisir...)"
+                        txt.layout.display = "flex" if is_custom else "none"
+                        tb.layout.display  = "flex" if is_custom else "none"
+                    remap_dd.observe(_on_dd2, names="value")
+
+                    def _on_test(_, txt=remap_txt, sl=status):
+                        url = txt.value.strip()
+                        if not url:
+                            sl.value = "<span style='color:#f59e0b;font-size:0.8em;'>Saisir une URL d'abord</span>"
+                            return
+                        import urllib.request as _ur
+                        try:
+                            req = _ur.Request(url, method="HEAD", headers={"User-Agent": "Mozilla/5.0"})
+                            with _ur.urlopen(req, timeout=5) as r:
+                                sl.value = f"<span style='color:#059669;font-size:0.8em;'>✓ URL accessible ({r.status})</span>"
+                        except Exception as e:
+                            sl.value = f"<span style='color:#ef4444;font-size:0.8em;'>✗ {str(e)[:60]}</span>"
+                    test_btn.on_click(_on_test)
 
                     def _on_apply(_, u=uri, dd=remap_dd, txt=remap_txt,
                                   sl=status, opts=loaded_onto_opts):
@@ -1027,101 +1063,134 @@ class DataLoaderUI:
                                     g.remove((None, _OWL.imports, old_uri))
                             sl.value = f"<span style='color:#059669;font-size:0.8em;'>✓ fusionné depuis {target_key}</span>"
                         elif new_iri_str:
-                            new_uri = URIRef(new_iri_str)
-                            for g in self.state.data_raw.values():
-                                if not hasattr(g, "remove"):
-                                    continue
-                                for s, p, o in list(g.triples((None, _OWL.imports, old_uri))):
-                                    g.remove((s, p, o)); g.add((s, p, new_uri))
-                            sl.value = f"<span style='color:#059669;font-size:0.8em;'>✓ remappé → {new_iri_str[:40]}</span>"
+                            # Tenter de charger depuis l'URL/chemin et fusionner
+                            try:
+                                g_new = rdflib.Graph()
+                                g_new.parse(new_iri_str)
+                                for g in self.state.data_raw.values():
+                                    if not hasattr(g, "remove"):
+                                        continue
+                                    if (None, _OWL.imports, old_uri) in g:
+                                        for t in g_new:
+                                            g.add(t)
+                                        g.remove((None, _OWL.imports, old_uri))
+                                sl.value = f"<span style='color:#059669;font-size:0.8em;'>✓ chargé et fusionné ({len(g_new)} triples)</span>"
+                            except Exception as e_load:
+                                # Fallback : remapper l'IRI seulement
+                                new_uri = URIRef(new_iri_str)
+                                for g in self.state.data_raw.values():
+                                    if not hasattr(g, "remove"):
+                                        continue
+                                    for s, p, o in list(g.triples((None, _OWL.imports, old_uri))):
+                                        g.remove((s, p, o)); g.add((s, p, new_uri))
+                                sl.value = f"<span style='color:#f59e0b;font-size:0.8em;'>IRI remappé (chargement échoué: {str(e_load)[:40]})</span>"
                     apply_btn.on_click(_on_apply)
                     panels.append(widgets.HBox(
-                        [uri_lbl, remap_dd, remap_txt, apply_btn, status],
+                        [uri_lbl, remap_dd, remap_txt, test_btn, apply_btn, status],
                         layout=widgets.Layout(gap="6px", align_items="center",
                                               flex_wrap="wrap", margin="3px 0")))
         self._pending_unresolved = {}
 
-        # ── 3. Preview graphe (toutes sources confondues) ─────────────────────
+        # ── 3. Preview schéma fléché par nœud source ─────────────────────────
+        preview_cfg = self.state.config.get("loading", {}).get("preview", {})
+        triplets_per_node = int(preview_cfg.get("onto_triplets_per_node", 3))
+        max_source_nodes  = int(preview_cfg.get("onto_max_source_nodes", 8))
+
         try:
             import networkx as nx
             from rdflib.namespace import RDF, RDFS, OWL as _OWL
 
-            # Fusionner tous les graphes ontologie chargés
-            merged = rdflib.Graph()
-            for k in onto_keys:
-                g = self.state.data_raw.get(k)
-                if g and hasattr(g, "__iter__"):
-                    for t in g:
-                        merged.add(t)
-
-            # Construire un graphe NetworkX de classes/propriétés (max 60 nœuds)
-            G = nx.DiGraph()
             def _short(uri):
                 s = str(uri)
                 return s.split("#")[-1] if "#" in s else s.rsplit("/", 1)[-1]
 
-            edges_added = 0
-            for s, p, o in merged:
-                if edges_added >= 120:
-                    break
-                ps = _short(p)
-                if ps in ("subClassOf", "domain", "range", "type",
-                          "subPropertyOf", "equivalentClass"):
-                    ss, os_ = _short(s), _short(o)
-                    if ss and os_ and ss != os_:
-                        G.add_edge(ss, os_, label=ps)
-                        edges_added += 1
+            # Un onglet par source ontologie
+            preview_tab_children, preview_tab_titles = [], []
+            for key in onto_keys:
+                g = self.state.data_raw.get(key)
+                if not g or not hasattr(g, "__iter__"):
+                    continue
+                fn = getattr(g, "_orig_filename", key)
 
-            if G.number_of_nodes() > 0:
-                fig, ax = plt.subplots(figsize=(12, 7))
-                fig.patch.set_facecolor("#f8fafc")
-                ax.set_facecolor("#f8fafc")
-                pos = nx.spring_layout(G, k=1.8, seed=42)
-                # Colorier par type de nœud
-                node_colors = []
-                for node in G.nodes():
-                    in_d, out_d = G.in_degree(node), G.out_degree(node)
-                    if in_d == 0:
-                        node_colors.append("#3b82f6")   # racine → bleu
-                    elif out_d == 0:
-                        node_colors.append("#10b981")   # feuille → vert
-                    else:
-                        node_colors.append("#8b5cf6")   # intermédiaire → violet
-                nx.draw_networkx_nodes(G, pos, node_color=node_colors,
-                                       node_size=600, alpha=0.85, ax=ax)
-                nx.draw_networkx_labels(G, pos, font_size=7, font_color="white",
-                                        font_weight="bold", ax=ax)
-                edge_labels = nx.get_edge_attributes(G, "label")
-                nx.draw_networkx_edges(G, pos, edge_color="#94a3b8",
-                                       arrows=True, arrowsize=15,
-                                       connectionstyle="arc3,rad=0.1", ax=ax)
-                nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels,
-                                              font_size=6, font_color="#475569", ax=ax)
-                ax.set_title(f"Aperçu des relations ontologiques — {merged.__len__()} triples fusionnés",
-                             fontsize=10, color="#374151")
-                ax.axis("off")
-                plt.tight_layout()
+                # Sélectionner les nœuds sources les plus connectés
+                from collections import defaultdict
+                src_counts: dict = defaultdict(int)
+                for s, p, o in g:
+                    src_counts[s] += 1
+                top_sources = sorted(src_counts, key=lambda x: -src_counts[x])[:max_source_nodes]
+
+                G = nx.DiGraph()
+                for src in top_sources:
+                    count = 0
+                    for s2, p2, o2 in g.triples((src, None, None)):
+                        if count >= triplets_per_node:
+                            break
+                        ss, ps, os_ = _short(s2), _short(p2), _short(o2)
+                        if ss and ps and os_ and ss != os_:
+                            G.add_edge(ss, os_, label=ps)
+                            count += 1
 
                 graph_out = widgets.Output()
-                with graph_out:
-                    ipy_display(fig)
-                plt.close(fig)
+                if G.number_of_nodes() > 0:
+                    fig, ax = plt.subplots(figsize=(10, 5))
+                    fig.patch.set_facecolor("#f8fafc"); ax.set_facecolor("#f8fafc")
+                    pos = nx.spring_layout(G, k=2.2, seed=42)
+                    source_nodes = {_short(s) for s in top_sources}
+                    node_colors = [
+                        "#3b82f6" if n in source_nodes else "#10b981"
+                        for n in G.nodes()
+                    ]
+                    nx.draw_networkx_nodes(G, pos, node_color=node_colors,
+                                           node_size=500, alpha=0.9, ax=ax)
+                    nx.draw_networkx_labels(G, pos, font_size=7, font_color="white",
+                                            font_weight="bold", ax=ax)
+                    nx.draw_networkx_edges(G, pos, edge_color="#94a3b8",
+                                           arrows=True, arrowsize=14,
+                                           connectionstyle="arc3,rad=0.12", ax=ax)
+                    edge_labels = nx.get_edge_attributes(G, "label")
+                    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels,
+                                                  font_size=6, font_color="#475569", ax=ax)
+                    ax.set_title(
+                        f"{fn} — {len(g)} triples · {G.number_of_nodes()} nœuds affichés "
+                        f"({triplets_per_node} triplets/source, {max_source_nodes} sources max)",
+                        fontsize=9, color="#374151")
+                    ax.axis("off")
+                    plt.tight_layout()
+                    with graph_out:
+                        ipy_display(fig)
+                    plt.close(fig)
+                else:
+                    with graph_out:
+                        print(f"Aucune relation visualisable pour {fn}.")
+
+                preview_tab_children.append(graph_out)
+                preview_tab_titles.append(f"{key}")
+
+            if preview_tab_children:
                 panels.append(widgets.HTML(
-                    "<div style='font-weight:600;color:#374151;margin:14px 0 4px 0;'>"
-                    "🕸️ Aperçu graphe (toutes sources)</div>"
-                    "<div style='font-size:0.78em;color:#6b7280;margin-bottom:4px;'>"
-                    "Bleu = racines · Violet = intermédiaires · Vert = feuilles · max 120 arêtes</div>"
+                    "<div style='font-weight:600;color:#374151;margin:14px 0 2px 0;'>"
+                    "🕸️ Aperçu schéma fléché par source</div>"
+                    f"<div style='font-size:0.78em;color:#6b7280;margin-bottom:6px;'>"
+                    f"Bleu = nœuds sources · Vert = objets · {triplets_per_node} triplets/nœud · "
+                    f"{max_source_nodes} sources max (configurable dans <code>loading.preview</code>)</div>"
                 ))
-                panels.append(graph_out)
+                if len(preview_tab_children) == 1:
+                    panels.append(preview_tab_children[0])
+                else:
+                    ptabs = widgets.Tab(children=preview_tab_children)
+                    for i, t in enumerate(preview_tab_titles):
+                        ptabs.set_title(i, t)
+                    panels.append(ptabs)
         except Exception as e:
             panels.append(widgets.HTML(
-                f"<div style='color:#9ca3af;font-size:0.8em;'>Aperçu graphe indisponible: {e}</div>"))
+                f"<div style='color:#9ca3af;font-size:0.8em;'>Aperçu schéma indisponible: {e}</div>"))
 
-        # ── 4. Tableau de triplets par ontologie ──────────────────────────────
+        # ── 4. Tableau de triplets par ontologie (compact) ────────────────────
         panels.append(widgets.HTML(
             "<div style='font-weight:600;color:#374151;margin:14px 0 4px 0;'>"
             "📄 Aperçu des triplets par source</div>"
         ))
+        max_preview_rows = int(preview_cfg.get("onto_max_preview_rows", 50))
         tab_children, tab_titles = [], []
         for key in onto_keys:
             g = self.state.data_raw.get(key)
@@ -1134,14 +1203,14 @@ class DataLoaderUI:
                     "Predicate": str(p).split("#")[-1] if "#" in str(p) else str(p).rsplit("/",1)[-1],
                     "Object":    str(o).split("#")[-1] if "#" in str(o) else str(o).rsplit("/",1)[-1],
                 })
-                if len(rows) >= 200:
+                if len(rows) >= max_preview_rows:
                     break
             df_triples = pd.DataFrame(rows)
             tab_out = widgets.Output()
             with tab_out:
                 ipy_display(HTML(
                     f"<div style='font-size:0.8em;color:#6b7280;margin-bottom:4px;'>"
-                    f"{len(g)} triples au total — affichage des 200 premiers</div>"
+                    f"{len(g)} triples au total — affichage des {max_preview_rows} premiers</div>"
                 ))
                 ipy_display(df_triples)
             tab_children.append(tab_out)
