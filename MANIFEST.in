@@ -1,2 +1,1 @@
-include config/default.toml
-recursive-include ml_pipeline *.py *.toml *.json *.yaml *.yml
+recursive-include ml_pipeline *.py *.toml *.json *.yaml *.yml default.toml

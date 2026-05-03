@@ -3,10 +3,10 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ml-pipeline"
+name = "datascientist"
 version = "2.0.0"
 authors = [{name = "dadflip"}]
-description = "ML Pipeline - Framework d'apprentissage automatique"
+description = "DataScientist - ML Pipeline avec dashboard Voilà"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
@@ -17,23 +17,25 @@ dependencies = [
     "scikit-learn",
     "scipy",
     "ipywidgets",
+    "voila",
+    "jupyter",
     "toml",
     "jinja2",
 ]
 
 [project.optional-dependencies]
+prod = ["voila", "jupyter"]
 boosting = ["xgboost", "lightgbm", "catboost"]
 vision = ["opencv-python-headless", "Pillow"]
 nlp = ["nltk", "spacy", "transformers"]
-graph = ["networkx"]
+graph = ["networkx", "rdflib", "owlready2"]
 all = [
     "xgboost", "lightgbm", "catboost",
     "category_encoders",
     "opencv-python-headless", "Pillow",
-    "networkx",
-    "rdflib", "owlready2",
-    "pyarrow",
-    "tqdm", "joblib",
+    "networkx", "rdflib", "owlready2",
+    "pyarrow", "tqdm", "joblib",
+    "voila", "jupyter",
 ]
 
 [project.urls]
@@ -44,4 +46,4 @@ packages = ["ml_pipeline", "ml_pipeline.steps"]
 include-package-data = true
 
 [tool.setuptools.package-data]
-ml_pipeline = ["*.toml", "*.json", "*.yaml", "*.yml"]
+ml_pipeline = ["*.toml", "*.json", "*.yaml", "*.yml", "default.toml"]

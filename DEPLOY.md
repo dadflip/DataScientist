@@ -3,12 +3,14 @@
 ## Installation sur Kaggle
 
 ```python
-# Installation depuis GitHub (méthode racine - recommandée)
+# Installation depuis GitHub
 !pip install "git+https://github.com/dadflip/DataScientist.git[all]" -q
 
 # Test
 from ml_pipeline import load_config, PipelineState, styles
-print("✅ ml_pipeline installé avec succès!")
+state = PipelineState()
+state.config = load_config('ml_pipeline/default.toml')
+print("ml_pipeline installé avec succès!")
 ```
 
 ## Installation locale
@@ -20,9 +22,8 @@ pip install -e .
 
 ## Fichiers de déploiement
 
-- `setup.py` — Package racine (méthode utilisée)
-- `ml_pipeline/setup.py` — Package sous-dossier (non utilisé)
-- `ml_pipeline/pyproject.toml` — Alternative (non utilisé)
+- `pyproject.toml` — Source de vérité (racine)
+- `MANIFEST.in` — Inclusion des fichiers de données
 
 ## URL
 

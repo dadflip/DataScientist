@@ -1,2 +1,0 @@
-include ../config/default.toml
-recursive-include . *.toml
