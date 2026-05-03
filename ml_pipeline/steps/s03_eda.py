@@ -3,9 +3,8 @@ from __future__ import annotations
 import io, base64, warnings
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import matplotlib
-matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import seaborn as sns
 import ipywidgets as widgets
 from IPython.display import display, HTML, clear_output
@@ -539,7 +538,9 @@ class UltimateEDA:
         self.uni_hue  = widgets.Dropdown(options=["None"] + cols, value="None", description="Hue:", layout=styles.LAYOUT_AUTO)
         self.uni_type = widgets.Dropdown(options=eda_cfg.get("univariate_plots", ["auto", "hist", "kde", "box", "violin", "bar", "pie"]),
                                           value="auto", description="Plot:", layout=styles.LAYOUT_AUTO)
-        self.uni_bins = widgets.IntSlider(value=30, min=5, max=100, description="Bins/Top N:", layout=styles.LAYOUT_AUTO)
+        self.uni_bins = widgets.IntSlider(value=30, min=5, max=100, description="Bins/Top N:",
+                                          layout=widgets.Layout(width="220px"),
+                                          style={"description_width": "initial"})
         self.uni_kde  = widgets.Checkbox(value=True, description="KDE", layout=styles.LAYOUT_AUTO)
         self.uni_log  = widgets.Checkbox(value=False, description="Log scale", layout=widgets.Layout(width="105px"))
         self.uni_pal  = widgets.Dropdown(options=eda_cfg.get("palettes", ["Set2", "Set1", "viridis", "plasma", "coolwarm"]),
@@ -574,7 +575,10 @@ class UltimateEDA:
         self.bi_type  = widgets.Dropdown(options=eda_cfg.get("bivariate_plots", ["auto", "scatter", "hexbin", "hist2d", "kde", "box", "violin", "strip", "swarm", "heatmap", "stacked_bar", "pie"]),
                                           value="auto", description="Plot:", layout=styles.LAYOUT_AUTO)
         self.bi_hue   = widgets.Dropdown(options=["None"] + cols, value="None", description="Hue:", layout=styles.LAYOUT_AUTO)
-        self.bi_alpha = widgets.FloatSlider(value=0.6, min=0.1, max=1.0, step=0.1, description="Alpha:", layout=styles.LAYOUT_AUTO)
+        self.bi_alpha = widgets.FloatSlider(value=0.6, min=0.1, max=1.0, step=0.1, description="Alpha:",
+                                             layout=widgets.Layout(width="220px"),
+                                             style={"description_width": "initial"},
+                                             readout_format=".1f")
         self.bi_pal   = widgets.Dropdown(options=eda_cfg.get("palettes", ["Set2", "Set1", "viridis"]),
                                           value="Set2", description="Palette:", layout=styles.LAYOUT_AUTO)
         self.bi_btn      = widgets.Button(description="Plot", button_style=styles.BTN_PRIMARY, layout=styles.LAYOUT_BTN_STD)
@@ -742,7 +746,8 @@ class UltimateEDA:
             fig.patch.set_facecolor("#f8fafc"); ax.set_facecolor("#f8fafc")
             missing.sort_values(ascending=False).plot(kind="bar", color="#ef4444", ax=ax)
             ax.set_title("Missing Values per Feature"); ax.set_ylabel("Count")
-            plt.tight_layout(); plt.show()
+            plt.tight_layout()
+            display(fig); plt.close(fig)
             self.dashboard.add(fig, "Missing Values")
 
     def _plot_uni(self, df: pd.DataFrame) -> None:
@@ -757,7 +762,7 @@ class UltimateEDA:
                 kde=self.uni_kde.value, log_scale=self.uni_log.value,
                 hue=hue, palette=self.uni_pal.value)
             self._last_uni_fig = fig
-            plt.show()
+            display(fig); plt.close(fig)
 
     def _plot_bi(self, df: pd.DataFrame) -> None:
         with self.bi_out:
@@ -777,7 +782,7 @@ class UltimateEDA:
                     plot_type=p_type, hue=h,
                     alpha=self.bi_alpha.value, palette=self.bi_pal.value)
             self._last_bi_fig = fig
-            plt.show()
+            display(fig); plt.close(fig)
 
     def _plot_multivariate(self, df: pd.DataFrame) -> None:
         with self.multi_out:
@@ -800,7 +805,8 @@ class UltimateEDA:
                 sns.heatmap(corr, annot=len(num_cols) <= 12, cmap="coolwarm",
                             fmt=".2f", center=0, square=True, ax=ax)
                 ax.set_title(f"{self.multi_corr.value.capitalize()} Correlation Matrix")
-                plt.tight_layout(); plt.show()
+                plt.tight_layout()
+                display(fig); plt.close(fig)
             elif m_type == "Pairplot":
                 if len(cols) > 10:
                     print("[WARNING] Plus de 10 colonnes — utilisation des 10 premières.")
@@ -810,7 +816,8 @@ class UltimateEDA:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     g = sns.pairplot(df[cols_to_plot].dropna(), hue=h, palette="Set2")
-                    fig = g.fig; plt.show()
+                    fig = g.fig
+                    display(fig); plt.close(fig)
             self._last_multi_fig = fig
 
     def _plot_target_analysis(self, df: pd.DataFrame) -> None:
@@ -841,7 +848,7 @@ class UltimateEDA:
                     df, feature, target, f_kind, t_kind, plot_type=p_type,
                     hue=target if t_kind in ("categorical", "binary") else None,
                     alpha=0.7, palette="Set2")
-            plt.show()
+            display(fig); plt.close(fig)
             self.dashboard.add(fig, f"Target: {feature} vs {target}")
 
     def _plot_comparison(self) -> None:
@@ -869,7 +876,8 @@ class UltimateEDA:
                 ax.set_title(f"Category Distribution Drift for '{col}'")
                 ax.set_ylabel("Proportion")
             ax.set_xlabel(col); ax.legend()
-            plt.tight_layout(); plt.show()
+            plt.tight_layout()
+            display(fig); plt.close(fig)
             self._last_comp_fig = fig
 
     # ── non-tabular UIs ───────────────────────────────────────────────────────
@@ -896,7 +904,8 @@ class UltimateEDA:
                         ax.plot(hist, color=color, alpha=0.8)
                         ax.fill_between(range(256), hist, color=color, alpha=0.3)
                     ax.set_title("Color Histogram"); ax.set_xlim([0, 256])
-                    plt.tight_layout(); plt.show()
+                    plt.tight_layout()
+                    display(fig); plt.close(fig)
 
     def _build_text_ui(self, text: str) -> None:
         out = widgets.Output()
@@ -912,7 +921,8 @@ class UltimateEDA:
                 fig.patch.set_facecolor("#f8fafc")
                 sns.barplot(x=list(top.values()), y=list(top.keys()), palette="viridis", ax=ax)
                 ax.set_title("Top 15 Most Common Words")
-                plt.tight_layout(); plt.show()
+                plt.tight_layout()
+                display(fig); plt.close(fig)
             print("--- Preview ---")
             print(text[:2000] + ("\n... [TRUNCATED]" if len(text) > 2000 else ""))
 
@@ -932,7 +942,8 @@ class UltimateEDA:
             nx.draw(H, node_size=20, alpha=0.6, edge_color="#9ca3af",
                     node_color="#3b82f6", ax=axes[1])
             axes[1].set_title("Graph Sample (100 nodes)")
-            plt.tight_layout(); plt.show()
+            plt.tight_layout()
+            display(fig); plt.close(fig)
 
     def _build_ontology_ui(self, g) -> None:
         out = widgets.Output()
@@ -964,7 +975,9 @@ class UltimateEDA:
         eda_cfg = getattr(self.state, "config", {}).get("eda", {})
         self.ts_type     = widgets.Dropdown(options=eda_cfg.get("ts_plots", ["Line", "Scatter", "Area", "Box (par mois/année)", "Autocorrélation"]),
                                              value="Line", description="Plot Type:", layout=styles.LAYOUT_DD)
-        self.ts_window   = widgets.IntSlider(value=1, min=1, max=365, description="Rolling Window:", layout=styles.LAYOUT_AUTO)
+        self.ts_window   = widgets.IntSlider(value=1, min=1, max=365, description="Rolling Window:",
+                                              layout=widgets.Layout(width="250px"),
+                                              style={"description_width": "initial"})
         self.ts_btn      = widgets.Button(description="Plot", button_style=styles.BTN_PRIMARY, layout=styles.LAYOUT_BTN_STD)
         self.ts_save_btn = widgets.Button(description="Save to Dashboard", button_style="info", layout=styles.LAYOUT_BTN_STD)
         self.ts_out      = widgets.Output()
@@ -1022,7 +1035,8 @@ class UltimateEDA:
             if p_type != "Autocorrélation":
                 ax.set_title(f"Time Series: {col}")
                 ax.set_xlabel("Time"); ax.set_ylabel(col)
-            plt.tight_layout(); plt.show()
+            plt.tight_layout()
+            display(fig); plt.close(fig)
             self._last_ts_fig = fig
 
 

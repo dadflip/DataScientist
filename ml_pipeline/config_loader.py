@@ -1,6 +1,9 @@
 """Chargement de la configuration TOML → dict Python."""
+
 from __future__ import annotations
+
 import pathlib
+
 
 try:
     import tomllib  # Python 3.11+
@@ -14,9 +17,10 @@ except ImportError:
 def load_config(path: str | pathlib.Path = "default.toml") -> dict:
     """
     Charge le fichier TOML et retourne un dict.
-    Fallback : si tomllib/tomli absent, utilise tomllib via subprocess pip install.
+    Fallback : si tomllib/tomli absent, installe tomli via pip.
     """
     path = pathlib.Path(path)
+
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {path}")
 
@@ -28,4 +32,4 @@ def load_config(path: str | pathlib.Path = "default.toml") -> dict:
         _tomllib = tomllib  # type: ignore
 
     with open(path, "rb") as f:
-        return _tomllib.loads(f.read().decode("utf-8"))
+        return _tomllib.load(f)

@@ -351,6 +351,329 @@ type = "checkbox"
 label = "Concat auto"
 value = false
 
+[[loading.mode_configs.multi_source]]
+id = "load_order"
+type = "checkbox"
+label = "Respecter l'ordre des slots"
+value = true
+help = "Pour les ontologies avec imports : charger dans l'ordre affiché (base d'abord, dépendantes ensuite)"
+
+# -- Configurations avancées par type de source --
+# Commun à tous les types tabulaires
+[[loading.adv_configs.csv]]
+id = "sep"
+type = "text"
+description = "Séparateur"
+value = ","
+placeholder = ","
+help = "Caractère séparateur de colonnes (ex: , ; \\t |)"
+
+[[loading.adv_configs.csv]]
+id = "enc"
+type = "dropdown"
+description = "Encodage"
+value = "utf-8"
+options_key = "encodings"
+help = "Encodage du fichier texte"
+
+[[loading.adv_configs.csv]]
+id = "header"
+type = "dropdown"
+description = "Ligne d'en-tête"
+value = "infer"
+options = ["infer", "0", "None"]
+help = "Ligne utilisée comme en-tête (infer = auto, None = pas d'en-tête)"
+
+[[loading.adv_configs.csv]]
+id = "skiprows"
+type = "text"
+description = "Sauter N lignes"
+value = ""
+placeholder = "0"
+help = "Nombre de lignes à ignorer au début"
+
+[[loading.adv_configs.csv]]
+id = "nrows"
+type = "text"
+description = "Nb lignes max"
+value = ""
+placeholder = "toutes"
+help = "Nombre maximum de lignes à charger"
+
+[[loading.adv_configs.csv]]
+id = "usecols"
+type = "text"
+description = "Colonnes (usecols)"
+value = ""
+placeholder = "col1, col2 ou 0, 1, 2"
+help = "Colonnes à garder (noms ou indices séparés par virgule)"
+
+[[loading.adv_configs.csv]]
+id = "index_col"
+type = "text"
+description = "Colonne index"
+value = ""
+placeholder = "nom ou indice"
+help = "Colonne à utiliser comme index"
+
+[[loading.adv_configs.csv]]
+id = "parse_dates"
+type = "checkbox"
+description = "Parser les dates auto"
+value = false
+help = "Tenter de convertir les colonnes object en datetime"
+
+[[loading.adv_configs.csv]]
+id = "sample_frac"
+type = "floatslider"
+description = "Échantillon (frac)"
+value = 1.0
+min = 0.01
+max = 1.0
+step = 0.01
+help = "Fraction des lignes à charger (1.0 = tout)"
+
+# TSV — mêmes options que CSV mais séparateur par défaut = tab
+[[loading.adv_configs.tsv]]
+id = "sep"
+type = "text"
+description = "Séparateur"
+value = "\t"
+placeholder = "\\t"
+help = "Caractère séparateur (\\t pour tabulation)"
+
+[[loading.adv_configs.tsv]]
+id = "enc"
+type = "dropdown"
+description = "Encodage"
+value = "utf-8"
+options_key = "encodings"
+help = "Encodage du fichier"
+
+[[loading.adv_configs.tsv]]
+id = "header"
+type = "dropdown"
+description = "Ligne d'en-tête"
+value = "infer"
+options = ["infer", "0", "None"]
+help = "Ligne utilisée comme en-tête"
+
+[[loading.adv_configs.tsv]]
+id = "skiprows"
+type = "text"
+description = "Sauter N lignes"
+value = ""
+placeholder = "0"
+help = "Nombre de lignes à ignorer au début"
+
+[[loading.adv_configs.tsv]]
+id = "nrows"
+type = "text"
+description = "Nb lignes max"
+value = ""
+placeholder = "toutes"
+help = "Nombre maximum de lignes à charger"
+
+[[loading.adv_configs.tsv]]
+id = "usecols"
+type = "text"
+description = "Colonnes (usecols)"
+value = ""
+placeholder = "col1, col2 ou 0, 1, 2"
+help = "Colonnes à garder"
+
+[[loading.adv_configs.tsv]]
+id = "parse_dates"
+type = "checkbox"
+description = "Parser les dates auto"
+value = false
+help = "Tenter de convertir les colonnes object en datetime"
+
+[[loading.adv_configs.tsv]]
+id = "sample_frac"
+type = "floatslider"
+description = "Échantillon (frac)"
+value = 1.0
+min = 0.01
+max = 1.0
+step = 0.01
+help = "Fraction des lignes à charger"
+
+# Excel
+[[loading.adv_configs.excel]]
+id = "sheet"
+type = "text"
+description = "Feuille (sheet)"
+value = "0"
+placeholder = "0 ou nom"
+help = "Nom ou indice de la feuille à charger"
+
+[[loading.adv_configs.excel]]
+id = "header"
+type = "dropdown"
+description = "Ligne d'en-tête"
+value = "infer"
+options = ["infer", "0", "None"]
+help = "Ligne utilisée comme en-tête"
+
+[[loading.adv_configs.excel]]
+id = "usecols"
+type = "text"
+description = "Colonnes (usecols)"
+value = ""
+placeholder = "col1, col2 ou 0, 1, 2"
+help = "Colonnes à garder"
+
+[[loading.adv_configs.excel]]
+id = "parse_dates"
+type = "checkbox"
+description = "Parser les dates auto"
+value = false
+help = "Tenter de convertir les colonnes object en datetime"
+
+# JSON
+[[loading.adv_configs.json]]
+id = "orient"
+type = "dropdown"
+description = "Orient"
+value = "columns"
+options = ["columns", "records", "index", "split", "values", "table"]
+help = "Format d'orientation du JSON"
+
+[[loading.adv_configs.json]]
+id = "lines"
+type = "checkbox"
+description = "JSON Lines (ndjson)"
+value = false
+help = "Lire un fichier JSON Lines (une entrée par ligne)"
+
+# SQLite
+[[loading.adv_configs.sqlite]]
+id = "table"
+type = "text"
+description = "Nom de la table"
+value = ""
+placeholder = "laissez vide pour la 1ère table"
+help = "Nom de la table SQLite à charger (vide = première table)"
+
+# Séries temporelles
+[[loading.adv_configs.timeseries]]
+id = "sep"
+type = "text"
+description = "Séparateur"
+value = ","
+placeholder = ","
+help = "Séparateur CSV"
+
+[[loading.adv_configs.timeseries]]
+id = "enc"
+type = "dropdown"
+description = "Encodage"
+value = "utf-8"
+options_key = "encodings"
+help = "Encodage du fichier"
+
+[[loading.adv_configs.timeseries]]
+id = "parse_dates"
+type = "checkbox"
+description = "Parser les dates auto"
+value = true
+help = "Convertir automatiquement les colonnes datetime"
+
+[[loading.adv_configs.timeseries]]
+id = "index_col"
+type = "text"
+description = "Colonne datetime (index)"
+value = ""
+placeholder = "nom ou indice"
+help = "Colonne à utiliser comme index temporel"
+
+# Image
+[[loading.adv_configs.image]]
+id = "mode"
+type = "dropdown"
+description = "Mode couleur"
+value = "RGB"
+options_key = "image_modes"
+help = "Mode de conversion de l'image"
+
+[[loading.adv_configs.image]]
+id = "resize"
+type = "text"
+description = "Resize (LxH)"
+value = ""
+placeholder = "224x224"
+help = "Redimensionner l'image (ex: 224x224)"
+
+# Graphe
+[[loading.adv_configs.graph]]
+id = "format"
+type = "dropdown"
+description = "Format graphe"
+value = "auto"
+options_key = "graph_formats"
+help = "Format du fichier de graphe"
+
+# Ontologie
+[[loading.adv_configs.ontology]]
+id = "format"
+type = "dropdown"
+description = "Format RDF"
+value = "auto"
+options = ["auto", "owl", "xml", "turtle", "n3", "nt", "json-ld"]
+help = "auto = détecte le format (OWL/XML, RDF/XML, Turtle, N3, NT, JSON-LD). 'owl' force OWL/XML via owlready2+etree."
+
+[[loading.adv_configs.ontology]]
+id = "store"
+type = "dropdown"
+description = "Store type"
+value = "Graph"
+options = ["Graph", "ConjunctiveGraph"]
+help = "ConjunctiveGraph pour les ontologies avec named graphs. Graph pour usage standard."
+
+[[loading.adv_configs.ontology]]
+id = "local_dirs"
+type = "text"
+description = "Dossiers locaux"
+value = ""
+placeholder = "/data/onto;/shared/onto"
+help = "Dossiers supplémentaires pour résoudre les imports localement (séparés par ;)"
+
+# ZIP
+[[loading.adv_configs.zip]]
+id = "content_type"
+type = "dropdown"
+description = "Type de contenu"
+value = "csv"
+options_key = "zip_formats"
+help = "Type des fichiers contenus dans le ZIP"
+
+# Texte
+[[loading.adv_configs.text]]
+id = "enc"
+type = "dropdown"
+description = "Encodage"
+value = "utf-8"
+options_key = "encodings"
+help = "Encodage du fichier texte"
+
+# Clipboard
+[[loading.adv_configs.clipboard]]
+id = "sep"
+type = "text"
+description = "Séparateur"
+value = ","
+placeholder = ","
+help = "Séparateur CSV du texte collé"
+
+[[loading.adv_configs.clipboard]]
+id = "header"
+type = "dropdown"
+description = "Ligne d'en-tête"
+value = "infer"
+options = ["infer", "0", "None"]
+help = "Ligne utilisée comme en-tête"
+
 [loading.preview]
 max_rows = 5
 sample_threshold = 100_000
