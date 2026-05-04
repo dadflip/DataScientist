@@ -1645,6 +1645,58 @@ class_name = "AgglomerativeClustering"
 module = "sklearn.cluster"
 params = { n_clusters = 8, linkage = "ward" }
 
+# ═══════════════════════════════════════════════════════════════════════════
+# MODELING — ONTOLOGY (Knowledge Graph / Ontology specific tasks)
+# ═══════════════════════════════════════════════════════════════════════════
+
+[[modeling.ontology.consistency]]
+name = "OWL Consistency Checker"
+class_name = "OWLReasoner"
+module = "owlready2.reasoning"
+params = { }
+
+[[modeling.ontology.consistency]]
+name = "RDFS Closure"
+class_name = "RDFSReasoner"
+module = "rdflib.plugins.parsers.rdfs"
+params = { }
+
+[[modeling.ontology.knowledge_graph_completion]]
+name = "TransE (KGE)"
+class_name = "TransE"
+module = "torchkge.models"
+params = { embedding_dim = 100, epochs = 100 }
+
+[[modeling.ontology.knowledge_graph_completion]]
+name = "ComplEx (KGE)"
+class_name = "ComplEx"
+module = "torchkge.models"
+params = { embedding_dim = 100, epochs = 100 }
+
+[[modeling.ontology.knowledge_graph_completion]]
+name = "DistMult (KGE)"
+class_name = "DistMult"
+module = "torchkge.models"
+params = { embedding_dim = 100, epochs = 100 }
+
+[[modeling.ontology.knowledge_graph_completion]]
+name = "Node2Vec (Graph Walks)"
+class_name = "Node2Vec"
+module = "node2vec"
+params = { dimensions = 128, walk_length = 80, num_walks = 10, p = 1, q = 1 }
+
+[[modeling.ontology.entity_linking]]
+name = "URI Similarity Matcher"
+class_name = "URISimilarityMatcher"
+module = "sklearn.metrics.pairwise"
+params = { metric = "jaccard" }
+
+[[modeling.ontology.semantic_reasoning]]
+name = "Rule-based Reasoner"
+class_name = "RuleReasoner"
+module = "rdflib.plugins.sparql"
+params = { ruleset = "rdfs" }
+
 # ---------------------------------------------------------------------------
 # ÉTAPE 10 — METRICS
 # ---------------------------------------------------------------------------

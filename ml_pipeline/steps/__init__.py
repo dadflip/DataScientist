@@ -27,6 +27,11 @@ def feature_eng_runner(state):
     return runner(state)
 
 
+def ontology_feature_eng_runner(state):
+    from .s04_ontology import runner
+    return runner(state)
+
+
 def cleaning_runner(state):
     from .s05_cleaning import runner
     return runner(state)
@@ -69,7 +74,7 @@ def export_runner(state):
 
 __all__ = [
     "install_runner", "loading_runner", "domains_runner", "eda_runner",
-    "feature_eng_runner", "cleaning_runner", "encoding_runner", "split_runner",
-    "modeling_runner", "metrics_runner", "optimization_runner",
+    "feature_eng_runner", "ontology_feature_eng_runner", "cleaning_runner", "encoding_runner",
+    "split_runner", "modeling_runner", "metrics_runner", "optimization_runner",
     "predictions_runner", "export_runner",
 ]

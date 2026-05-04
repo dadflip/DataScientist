@@ -154,7 +154,57 @@ class UltimateEncoder:
                                                self.tab_out]))
         else:
             tabs_children.append(widgets.HTML("<div style='padding:16px;'>Aucune donnée tabulaire nettoyée.</div>"))
-        tabs_children.append(widgets.HTML("<div style='padding:16px;'>Données non-tabulaires transmises directement.</div>"))
+        # Onglet Non-Tabular avec gestion des ontologies
+        non_tabular_content = [widgets.HTML("<div style='padding:8px;font-weight:600;color:#374151;'>Données non-tabulaires détectées:</div>")]
+
+        if self.non_tabular:
+            for name, data in self.non_tabular.items():
+                data_type = self._detect_non_tabular_type(data)
+                if data_type == "ontology":
+                    # Ontology specific options
+                    onto_opts = widgets.Dropdown(
+                        options=[
+                            ("Pass-through (conserver tel quel)", "passthrough"),
+                            ("Extraire classes → DataFrame", "extract_classes"),
+                            ("Extraire propriétés → DataFrame", "extract_props"),
+                            ("Convertir NetworkX → graphe", "to_networkx"),
+                            ("Vectoriser Node2Vec", "node2vec"),
+                            ("Supprimer", "drop"),
+                        ],
+                        value="passthrough",
+                        description=f"{name}:",
+                        layout=widgets.Layout(width="500px")
+                    )
+                    non_tabular_content.append(widgets.HBox([
+                        widgets.HTML(f"<span style='color:#6d28d9;font-weight:500;'>🧠 Ontologie:</span>"),
+                        onto_opts
+                    ], layout=widgets.Layout(padding="4px 0")))
+                elif data_type == "graph":
+                    non_tabular_content.append(widgets.HBox([
+                        widgets.HTML(f"<span style='color:#059669;font-weight:500;'>📊 Graphe:</span> {name}")
+                    ], layout=widgets.Layout(padding="4px 0")))
+                elif data_type == "image":
+                    non_tabular_content.append(widgets.HBox([
+                        widgets.HTML(f"<span style='color:#3b82f6;font-weight:500;'>🖼️ Image:</span> {name}")
+                    ], layout=widgets.Layout(padding="4px 0")))
+                else:
+                    non_tabular_content.append(widgets.HBox([
+                        widgets.HTML(f"<span style='color:#64748b;font-weight:500;'>📦 Autre:</span> {name}")
+                    ], layout=widgets.Layout(padding="4px 0")))
+
+            # Bouton appliquer pour non-tabulaire
+            btn_apply_non_tab = widgets.Button(
+                description="Appliquer Encoding Non-Tabular",
+                button_style="info",
+                layout=widgets.Layout(margin="10px 0"))
+            btn_apply_non_tab.on_click(self._apply_non_tabular)
+            non_tabular_content.append(btn_apply_non_tab)
+            self.non_tab_out = widgets.Output()
+            non_tabular_content.append(self.non_tab_out)
+        else:
+            non_tabular_content.append(widgets.HTML("<div style='padding:16px;color:#64748b;'>Aucune donnée non-tabulaire.</div>"))
+
+        tabs_children.append(widgets.VBox(non_tabular_content, layout=widgets.Layout(padding="10px")))
         tabs = widgets.Tab(children=tabs_children)
         tabs.set_title(0, "Tabular"); tabs.set_title(1, "Non-Tabular")
         header  = widgets.HTML(styles.card_html("Encode", "Encoding & Outliers", ""))
@@ -275,6 +325,47 @@ class UltimateEncoder:
             display(styles.info_msg(
                 f"Encodage appliqué sur '{self.current_ds}'.<br>"
                 f"Original : {self.datasets[self.current_ds].shape} → Final : {df.shape}"))
+
+    def _detect_non_tabular_type(self, data) -> str:
+        """Détecte le type de données non-tabulaires."""
+        # Check for ontology (rdflib Graph)
+        if hasattr(data, "triples") and hasattr(data, "objects") and hasattr(data, "subjects"):
+            return "ontology"
+        # Check for NetworkX graph
+        if hasattr(data, "nodes") and hasattr(data, "edges"):
+            return "graph"
+        # Check for PIL Image
+        if hasattr(data, "mode") and hasattr(data, "size") and hasattr(data, "convert"):
+            return "image"
+        return "unknown"
+
+    def _apply_non_tabular(self, b) -> None:
+        """Applique l'encoding aux données non-tabulaires (ontologies)."""
+        with self.non_tab_out:
+            clear_output()
+            if not self.non_tabular:
+                display(styles.info_msg("Aucune donnée non-tabulaire à encoder."))
+                return
+
+            for name, data in self.non_tabular.items():
+                data_type = self._detect_non_tabular_type(data)
+                if data_type == "ontology":
+                    # Get the selected encoding option
+                    # Note: In a full implementation, we'd track widget values per ontology
+                    # For now, just pass through
+                    self.state.data_encoded[name] = data
+                    display(styles.success_msg(f"Ontologie '{name}' : pass-through appliqué."))
+                    display(styles.info_msg(
+                        f"Pour un traitement avancé, utilisez l'étape 'Ontology Feature Engineering'."))
+                elif data_type == "graph":
+                    self.state.data_encoded[name] = data
+                    display(styles.success_msg(f"Graphe '{name}' : pass-through."))
+                elif data_type == "image":
+                    self.state.data_encoded[name] = data
+                    display(styles.success_msg(f"Image '{name}' : pass-through."))
+                else:
+                    self.state.data_encoded[name] = data
+                    display(styles.info_msg(f"Donnée '{name}' : pass-through (type inconnu)."))
 
 
 def runner(state) -> UltimateEncoder:

@@ -423,11 +423,13 @@ class DataLoaderUI:
                         continue
                     print(f"Loading {slot_name}...")
                     orig_filename = slot_name  # nom affiché par défaut
-                    if uploaded_file:
-                        orig_filename = uploaded_file["name"]
-                        ext = os.path.splitext(uploaded_file["name"])[1]
+                    if uploaded_file and isinstance(uploaded_file, dict):
+                        # Handle different uploaded file formats safely
+                        orig_filename = uploaded_file.get("name", slot_name)
+                        content = uploaded_file.get("content", b"")
+                        ext = os.path.splitext(orig_filename)[1] if orig_filename else ".tmp"
                         with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
-                            tmp.write(uploaded_file["content"])
+                            tmp.write(content)
                             path = tmp.name
                     elif path:
                         orig_filename = os.path.basename(path)
@@ -766,27 +768,72 @@ class DataLoaderUI:
                                     last_err = e
                             raise last_err or RuntimeError(f"Aucun format rdflib n'a fonctionné pour {fpath}")
 
+                        # ── helpers pour URLs ─────────────────────────────────
+                        def _is_url(p: str) -> bool:
+                            return p.startswith(("http://", "https://", "ftp://"))
+
+                        def _fetch_url(url: str) -> str:
+                            """Télécharge une URL et retourne le contenu texte."""
+                            import urllib.request as _urllib
+                            req = _urllib.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                            with _urllib.urlopen(req, timeout=30) as resp:
+                                return resp.read().decode("utf-8", errors="ignore")
+
                         # ── chargeur principal ────────────────────────────────
                         def _load_one(fpath: str, forced_fmt: str = "auto") -> tuple:
-                            """Charge une ontologie, retourne (graph, declared_imports)."""
-                            with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
-                                content = fh.read()
-                            sniffed = _sniff(content)
-                            display_name = orig_filename if fpath == path else os.path.basename(fpath)
+                            """Charge une ontologie depuis fichier local ou URL, retourne (graph, declared_imports)."""
+                            is_url_path = _is_url(fpath)
 
-                            if forced_fmt == "owl" or (forced_fmt == "auto" and sniffed == "owlxml"):
-                                if _owlready2 is not None:
-                                    try:
-                                        print(f"   [ontology] {display_name} → OWL/XML (owlready2)")
-                                        return _owlxml_via_owlready2(fpath, content)
-                                    except Exception as e1:
-                                        print(f"   [ontology] owlready2 échoué ({e1}), fallback etree")
+                            if is_url_path:
+                                # Télécharger le contenu depuis l'URL
+                                try:
+                                    content = _fetch_url(fpath)
+                                    sniffed = _sniff(content)
+                                    display_name = orig_filename if fpath == path else fpath.split("/")[-1]
+                                    print(f"   [ontology] {display_name} → téléchargé depuis URL")
+
+                                    # Pour les URLs, on utilise rdflib directement (pas owlready2 qui attend des fichiers locaux)
+                                    from rdflib.namespace import OWL as _OWL_NS
+                                    g2 = rdflib.ConjunctiveGraph() if use_conj else rdflib.Graph()
+                                    # Essayer de parser le contenu téléchargé
+                                    fmts = ["xml", "turtle", "n3", "nt", "json-ld"]
+                                    if forced_fmt != "auto":
+                                        fmts = [forced_fmt]
+
+                                    last_err = None
+                                    for fmt_try in fmts:
+                                        try:
+                                            g2.parse(data=content, format=fmt_try)
+                                            declared = [str(o) for o in g2.objects(None, _OWL_NS.imports)]
+                                            print(f"   [ontology] {display_name} → rdflib '{fmt_try}' (URL)")
+                                            return g2, declared
+                                        except Exception as e:
+                                            last_err = e
+                                    raise last_err or RuntimeError(f"Impossible de parser l'URL {fpath}")
+
+                                except Exception as e:
+                                    print(f"   [ontology] ⚠ Erreur téléchargement URL {fpath}: {e}")
+                                    raise
+                            else:
+                                # Chargement depuis fichier local
+                                with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
+                                    content = fh.read()
+                                sniffed = _sniff(content)
+                                display_name = orig_filename if fpath == path else os.path.basename(fpath)
+
+                                if forced_fmt == "owl" or (forced_fmt == "auto" and sniffed == "owlxml"):
+                                    if _owlready2 is not None:
+                                        try:
+                                            print(f"   [ontology] {display_name} → OWL/XML (owlready2)")
+                                            return _owlxml_via_owlready2(fpath, content)
+                                        except Exception as e1:
+                                            print(f"   [ontology] owlready2 échoué ({e1}), fallback etree")
+                                            return _owlxml_via_etree(fpath, content)
+                                    else:
+                                        print(f"   [ontology] {display_name} → OWL/XML (etree)")
                                         return _owlxml_via_etree(fpath, content)
                                 else:
-                                    print(f"   [ontology] {display_name} → OWL/XML (etree)")
-                                    return _owlxml_via_etree(fpath, content)
-                            else:
-                                return _rdf_cascade(fpath, forced_fmt, display_name)
+                                    return _rdf_cascade(fpath, forced_fmt, display_name)
 
                         # ── résolution récursive des imports ──────────────────
                         def _resolve_imports(g, declared, depth=0):
@@ -831,9 +878,19 @@ class DataLoaderUI:
                         unresolved_imports = _resolve_imports(g_onto, declared_imports)
 
                         # Stocker dans le cache inter-slots
-                        with open(path, "r", encoding="utf-8", errors="ignore") as fh:
-                            _head = fh.read(512)
-                        _base_iri = _extract_base_iri(_head, orig_filename)
+                        # Gérer les URLs (on ne peut pas les ouvrir comme fichiers locaux)
+                        if _is_url(path):
+                            # Pour les URLs, extraire le base IRI depuis le graphe chargé
+                            _base_iri = None
+                            for s, p, o in g_onto.triples((None, rdflib.RDF.type, rdflib.namespace.OWL.Ontology)):
+                                _base_iri = str(s)
+                                break
+                            if not _base_iri:
+                                _base_iri = path  # fallback sur l'URL
+                        else:
+                            with open(path, "r", encoding="utf-8", errors="ignore") as fh:
+                                _head = fh.read(512)
+                            _base_iri = _extract_base_iri(_head, orig_filename)
                         if not hasattr(self, "_onto_already_loaded"):
                             self._onto_already_loaded = {}
                         self._onto_already_loaded[_base_iri] = g_onto
