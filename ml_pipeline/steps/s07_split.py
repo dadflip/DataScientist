@@ -47,8 +47,14 @@ class SplitBalancingUI:
             self.ui = styles.error_msg("[ERROR] Configuration non chargée.")
             return
         self.dfs = {k: v for k, v in state.data_encoded.items() if isinstance(v, pd.DataFrame)}
-        balancing_cfg = state.config.get("balancing", [])
+        balancing_cfg = state.config.get("split", {}).get("balancing", {}).get("methods", [])
+        if not balancing_cfg:
+            # fallback sur l'ancienne clé
+            balancing_cfg = state.config.get("balancing", [])
         self.balancing_methods = [(b["label"], b["value"]) for b in balancing_cfg]
+        # index rapide label→value et value→label pour les Dropdowns
+        self._bal_val_to_label = {b["value"]: b["label"] for b in balancing_cfg}
+        self._bal_label_to_val = {b["label"]: b["value"] for b in balancing_cfg}
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -109,7 +115,8 @@ class SplitBalancingUI:
                 lbl_dist = widgets.HTML(f"<div style='width:140px;color:{color};font-size:12px'>{status} ({max_pct:.1f}%)</div>")
                 chk_signif = widgets.Checkbox(value=False, indent=False, layout=widgets.Layout(width="100px"))
                 dd_method  = widgets.Dropdown(options=self.balancing_methods,
-                                               value="smote" if max_pct > 90 else "none",
+                                               value=self._bal_val_to_label.get("smote", self.balancing_methods[0][0]) if max_pct > 90
+                                                     else self._bal_val_to_label.get("none", self.balancing_methods[0][0]),
                                                layout=widgets.Layout(width="190px"))
                 self.row_widgets[col] = {"signif": chk_signif, "method": dd_method}
                 rows.append(widgets.HBox([lbl_col, lbl_dist, chk_signif, dd_method],

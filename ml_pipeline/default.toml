@@ -681,6 +681,8 @@ sample_size = 10_000
 onto_triplets_per_node = 3
 onto_max_source_nodes = 8
 onto_max_preview_rows = 50
+onto_layout = "spring"
+onto_filter_meta = true
 
 # ---------------------------------------------------------------------------
 # ÉTAPE 2 — DOMAINS

@@ -923,11 +923,227 @@ class DataLoaderUI:
                     print(f" -> Error loading {slot_name}: {e}")
                     traceback.print_exc()
 
+    # ── helpers agnostiques (statiques, pas de dépendance à self) ────────────
+
+    @staticmethod
+    def _onto_cfg(preview_cfg: dict, key: str):
+        """Lit une clé de config avec fallback robuste."""
+        _DEFAULTS = {
+            "onto_triplets_per_node": 4,
+            "onto_max_source_nodes": 10,
+            "onto_max_preview_rows": 50,
+            "onto_min_edge_weight": 1,
+            "onto_layout": "spring",
+            "onto_filter_meta": True,
+        }
+        raw = preview_cfg.get(key, _DEFAULTS.get(key))
+        try:
+            return type(_DEFAULTS[key])(raw)
+        except (TypeError, ValueError, KeyError):
+            return _DEFAULTS.get(key)
+
+    @staticmethod
+    def _onto_short(uri) -> str:
+        """Raccourcit un URI RDF (URIRef, BNode, Literal) en label lisible."""
+        s = str(uri)
+        if s.startswith('"') or s.startswith("'"):
+            return s[:40] + ("…" if len(s) > 40 else "")
+        if s.startswith("_:"):
+            return f"_:{s[2:10]}"
+        if "#" in s:
+            return s.split("#")[-1] or s.rsplit("/", 1)[-1]
+        return s.rsplit("/", 1)[-1] or s
+
+    @staticmethod
+    def _onto_detect_profile(g) -> str:
+        """Détecte le profil dominant : 'owl' | 'skos' | 'rdfs' | 'rdf' | 'generic'."""
+        try:
+            uris = " ".join(str(p) for _, p, _ in g)
+        except Exception:
+            return "generic"
+        if "skos" in uris.lower():
+            return "skos"
+        if "owl#" in uris:
+            return "owl"
+        if "rdfs#" in uris or "rdf-schema" in uris:
+            return "rdfs"
+        if "rdf-syntax" in uris:
+            return "rdf"
+        return "generic"
+
+    @staticmethod
+    def _onto_sem_predicates(profile: str) -> list:
+        """Prédicats sémantiquement riches, ordonnés par intérêt, selon le profil."""
+        base = ["subClassOf", "subPropertyOf", "domain", "range",
+                "equivalentClass", "equivalentProperty", "disjointWith",
+                "inverseOf", "onProperty"]
+        if profile == "skos":
+            return ["broader", "narrower", "related", "hasTopConcept",
+                    "topConceptOf", "member"] + base
+        return base
+
+    _META_PREDICATES = frozenset({
+        "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+        "http://www.w3.org/2000/01/rdf-schema#isDefinedBy",
+        "http://www.w3.org/2002/07/owl#versionInfo",
+        "http://www.w3.org/2002/07/owl#imports",
+        "http://www.w3.org/2002/07/owl#versionIRI",
+        "http://www.w3.org/2002/07/owl#ontologyIRI",
+    })
+
+    def _onto_build_graph(self, g, preview_cfg: dict):
+        """Construit un DiGraph NetworkX agnostique, prédicats sémantiques prioritaires.
+        Retourne None si networkx absent ou graphe vide."""
+        try:
+            import networkx as nx
+        except ImportError:
+            return None
+        from collections import defaultdict
+        short      = self._onto_short
+        sem_preds  = self._onto_sem_predicates(self._onto_detect_profile(g))
+        filter_m   = self._onto_cfg(preview_cfg, "onto_filter_meta")
+        tpn        = self._onto_cfg(preview_cfg, "onto_triplets_per_node")
+        max_src    = self._onto_cfg(preview_cfg, "onto_max_source_nodes")
+
+        def _score(pred_uri: str) -> int:
+            sh = short(pred_uri)
+            try:
+                return len(sem_preds) - sem_preds.index(sh)
+            except ValueError:
+                return 0 if (filter_m and str(pred_uri) in self._META_PREDICATES) else 1
+
+        from_subject: dict = defaultdict(list)
+        for s, p, o in g:
+            sc = _score(str(p))
+            if sc >= 0:
+                from_subject[s].append((sc, p, o))
+
+        subject_totals = {s: sum(sc for sc, _, _ in triples)
+                          for s, triples in from_subject.items()}
+        top_subjects = sorted(subject_totals, key=lambda x: -subject_totals[x])[:max_src]
+
+        G = nx.DiGraph()
+        for src in top_subjects:
+            for score, p, o in sorted(from_subject[src], key=lambda x: -x[0])[:tpn]:
+                ss, ps, os_ = short(src), short(p), short(o)
+                if ss and ps and os_ and ss != os_:
+                    G.add_edge(ss, os_, label=ps, score=score)
+        return G if G.number_of_nodes() > 0 else None
+
+    def _onto_draw_graph(self, G, title: str, layout_name: str = "spring"):
+        """Dessine le DiGraph avec matplotlib. Retourne None si impossible."""
+        try:
+            import networkx as nx
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+            from matplotlib.patches import Patch
+        except ImportError:
+            return None
+        layout_fns = {
+            "spring":   lambda g: nx.spring_layout(g, k=3.0, seed=42),
+            "kamada":   lambda g: nx.kamada_kawai_layout(g),
+            "spectral": lambda g: nx.spectral_layout(g),
+            "shell":    lambda g: nx.shell_layout(g),
+        }
+        try:
+            pos = layout_fns.get(layout_name, layout_fns["spring"])(G)
+        except Exception:
+            pos = nx.spring_layout(G, k=3.0, seed=42)
+
+        in_deg  = dict(G.in_degree())
+        out_deg = dict(G.out_degree())
+        colors  = [
+            "#3b82f6" if out_deg.get(n, 0) > in_deg.get(n, 0) else
+            "#10b981" if in_deg.get(n, 0) > out_deg.get(n, 0) else
+            "#f59e0b"
+            for n in G.nodes()
+        ]
+
+        # Taille de figure adaptée au nombre de nœuds
+        n = G.number_of_nodes()
+        fw = max(10, min(14, n * 0.8))
+        fh = max(5,  min(9,  n * 0.5))
+        fig, ax = plt.subplots(figsize=(fw, fh))
+        fig.patch.set_facecolor("#f8fafc"); ax.set_facecolor("#f8fafc")
+
+        # Taille des nœuds adaptée pour que le texte tienne dedans
+        node_size = max(1800, min(3200, 3200 - n * 60))
+
+        nx.draw_networkx_nodes(G, pos, node_color=colors, node_size=node_size,
+                               alpha=0.92, ax=ax)
+
+        # Labels tronqués, police blanche, taille adaptée
+        font_size = max(6, min(9, 9 - n // 6))
+        labels = {nd: (nd[:16] + "…" if len(nd) > 16 else nd) for nd in G.nodes()}
+        nx.draw_networkx_labels(G, pos, labels=labels, font_size=font_size,
+                                font_color="white", font_weight="bold", ax=ax)
+
+        nx.draw_networkx_edges(G, pos, edge_color="#94a3b8", arrows=True,
+                               arrowsize=16, connectionstyle="arc3,rad=0.15",
+                               min_source_margin=20, min_target_margin=20, ax=ax)
+
+        # Labels d'arêtes uniquement si peu d'arêtes
+        if G.number_of_edges() <= 20:
+            edge_labels = {(u, v): d["label"] for u, v, d in G.edges(data=True)}
+            nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels,
+                                          font_size=6, font_color="#475569",
+                                          bbox=dict(boxstyle="round,pad=0.2",
+                                                    fc="white", ec="none", alpha=0.7),
+                                          ax=ax)
+
+        legend = [Patch(color="#3b82f6", label="source/domaine"),
+                  Patch(color="#10b981", label="objet/range"),
+                  Patch(color="#f59e0b", label="pivot")]
+        ax.legend(handles=legend, loc="lower right", fontsize=7, framealpha=0.8)
+        ax.set_title(f"{title}\n{G.number_of_nodes()} nœuds · {G.number_of_edges()} arêtes",
+                     fontsize=8, color="#374151")
+        ax.axis("off")
+        plt.tight_layout()
+        return fig
+
+    @staticmethod
+    def _onto_fallback_text(g, n: int = 20) -> str:
+        """Aperçu textuel quand matplotlib/networkx sont absents."""
+        short = DataLoaderUI._onto_short
+        lines = ["(matplotlib/networkx absent — aperçu textuel)\n"]
+        seen  = 0
+        for s, p, o in g:
+            lines.append(f"  {short(s)}  —[{short(p)}]→  {short(o)}")
+            seen += 1
+            if seen >= n:
+                rest = len(g) - n if hasattr(g, "__len__") else "?"
+                lines.append(f"  … et {rest} triplets supplémentaires")
+                break
+        return "\n".join(lines)
+
+    def _onto_build_triple_df(self, g, max_rows: int, filter_meta: bool):
+        """DataFrame de triplets trié par intérêt sémantique, avec filtrage méta optionnel."""
+        short    = self._onto_short
+        profile  = self._onto_detect_profile(g)
+        sem_set  = set(self._onto_sem_predicates(profile))
+        rows     = []
+        n_filtered = 0
+        for s, p, o in g:
+            if filter_meta and str(p) in self._META_PREDICATES:
+                n_filtered += 1
+                continue
+            rows.append({
+                "Subject":   short(s),
+                "Predicate": short(p),
+                "Object":    short(o),
+                "_sem":      0 if short(p) in sem_set else 1,
+            })
+        rows.sort(key=lambda r: (r["_sem"], r["Predicate"]))
+        df = pd.DataFrame(rows[:max_rows]).drop(columns=["_sem"], errors="ignore")
+        return df, n_filtered, len(rows)
+
+    # ── méthode principale ────────────────────────────────────────────────────
+
     def _show_ontology_post_ui(self, loaded: list[str]) -> None:
-        """Panneau post-chargement : ordre, imports non résolus, preview graphe + triplets."""
-        import io as _io
-        import matplotlib
-        import matplotlib.pyplot as plt
+        """Panneau post-chargement ontologie — résilient et agnostique.
+        Fonctionne pour OWL, SKOS, RDFS, RDF brut ou tout graphe rdflib.
+        Dégradation gracieuse si networkx/matplotlib absents."""
         from IPython.display import display as ipy_display
 
         onto_keys = [k for k in loaded if k in self.state.data_raw
@@ -936,6 +1152,11 @@ class DataLoaderUI:
 
         if not onto_keys and not any(s in loaded for s in pending):
             return
+
+        preview_cfg = self.state.config.get("loading", {}).get("preview", {})
+        filter_meta = self._onto_cfg(preview_cfg, "onto_filter_meta")
+        layout_name = str(self._onto_cfg(preview_cfg, "onto_layout"))
+        max_rows    = self._onto_cfg(preview_cfg, "onto_max_preview_rows")
 
         panels = []
 
@@ -951,13 +1172,15 @@ class DataLoaderUI:
             def _rebuild_rows():
                 new_rows = []
                 for i, key in enumerate(order_list):
-                    g   = self.state.data_raw.get(key)
-                    n   = len(g) if g and hasattr(g, "__len__") else "?"
-                    fn  = getattr(g, "_orig_filename", key)
+                    g       = self.state.data_raw.get(key)
+                    n       = len(g) if g and hasattr(g, "__len__") else "?"
+                    fn      = getattr(g, "_orig_filename", key)
+                    profile = self._onto_detect_profile(g) if g else "?"
                     lbl = widgets.HTML(
                         f"<span style='padding:3px 8px;background:#f1f5f9;"
                         f"border:1px solid #cbd5e1;border-radius:4px;font-size:0.83em;'>"
-                        f"<b>{key}</b> <span style='color:#6b7280;'>— {fn} ({n} triples)</span></span>"
+                        f"<b>{key}</b> <span style='color:#6b7280;'>"
+                        f"— {fn} · {n} triples · profil : {profile}</span></span>"
                     )
                     btn_up = widgets.Button(description="↑", tooltip="Monter",
                                             layout=widgets.Layout(width="28px", height="24px"))
@@ -1093,135 +1316,98 @@ class DataLoaderUI:
 
         # ── 3. Preview schéma fléché par nœud source ─────────────────────────
         preview_cfg = self.state.config.get("loading", {}).get("preview", {})
-        triplets_per_node = int(preview_cfg.get("onto_triplets_per_node", 3))
-        max_source_nodes  = int(preview_cfg.get("onto_max_source_nodes", 8))
+        tpn      = self._onto_cfg(preview_cfg, "onto_triplets_per_node")
+        max_src  = self._onto_cfg(preview_cfg, "onto_max_source_nodes")
+        lay_name = str(self._onto_cfg(preview_cfg, "onto_layout"))
 
-        try:
-            import networkx as nx
-            from rdflib.namespace import RDF, RDFS, OWL as _OWL
-
-            def _short(uri):
-                s = str(uri)
-                return s.split("#")[-1] if "#" in s else s.rsplit("/", 1)[-1]
-
-            # Un onglet par source ontologie
-            preview_tab_children, preview_tab_titles = [], []
-            for key in onto_keys:
-                g = self.state.data_raw.get(key)
-                if not g or not hasattr(g, "__iter__"):
-                    continue
-                fn = getattr(g, "_orig_filename", key)
-
-                # Sélectionner les nœuds sources les plus connectés
-                from collections import defaultdict
-                src_counts: dict = defaultdict(int)
-                for s, p, o in g:
-                    src_counts[s] += 1
-                top_sources = sorted(src_counts, key=lambda x: -src_counts[x])[:max_source_nodes]
-
-                G = nx.DiGraph()
-                for src in top_sources:
-                    count = 0
-                    for s2, p2, o2 in g.triples((src, None, None)):
-                        if count >= triplets_per_node:
-                            break
-                        ss, ps, os_ = _short(s2), _short(p2), _short(o2)
-                        if ss and ps and os_ and ss != os_:
-                            G.add_edge(ss, os_, label=ps)
-                            count += 1
-
-                graph_out = widgets.Output()
-                if G.number_of_nodes() > 0:
-                    fig, ax = plt.subplots(figsize=(10, 5))
-                    fig.patch.set_facecolor("#f8fafc"); ax.set_facecolor("#f8fafc")
-                    pos = nx.spring_layout(G, k=2.2, seed=42)
-                    source_nodes = {_short(s) for s in top_sources}
-                    node_colors = [
-                        "#3b82f6" if n in source_nodes else "#10b981"
-                        for n in G.nodes()
-                    ]
-                    nx.draw_networkx_nodes(G, pos, node_color=node_colors,
-                                           node_size=500, alpha=0.9, ax=ax)
-                    nx.draw_networkx_labels(G, pos, font_size=7, font_color="white",
-                                            font_weight="bold", ax=ax)
-                    nx.draw_networkx_edges(G, pos, edge_color="#94a3b8",
-                                           arrows=True, arrowsize=14,
-                                           connectionstyle="arc3,rad=0.12", ax=ax)
-                    edge_labels = nx.get_edge_attributes(G, "label")
-                    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels,
-                                                  font_size=6, font_color="#475569", ax=ax)
-                    ax.set_title(
-                        f"{fn} — {len(g)} triples · {G.number_of_nodes()} nœuds affichés "
-                        f"({triplets_per_node} triplets/source, {max_source_nodes} sources max)",
-                        fontsize=9, color="#374151")
-                    ax.axis("off")
-                    plt.tight_layout()
+        schema_panels = []
+        for key in onto_keys:
+            g_src = self.state.data_raw.get(key)
+            if not g_src or not hasattr(g_src, "__iter__"):
+                continue
+            fn = getattr(g_src, "_orig_filename", key)
+            G_nx = self._onto_build_graph(g_src, preview_cfg)
+            graph_out = widgets.Output()
+            if G_nx is not None:
+                fig = self._onto_draw_graph(
+                    G_nx,
+                    title=f"{fn} — {len(g_src)} triples · {tpn} triplets/source · {max_src} sources max",
+                    layout_name=lay_name,
+                )
+                if fig is not None:
                     with graph_out:
                         ipy_display(fig)
-                    plt.close(fig)
+                    try:
+                        import matplotlib.pyplot as _plt
+                        _plt.close(fig)
+                    except Exception:
+                        pass
                 else:
                     with graph_out:
-                        print(f"Aucune relation visualisable pour {fn}.")
+                        ipy_display(HTML(
+                            f"<pre style='font-size:0.78em;color:#374151;'>"
+                            f"{self._onto_fallback_text(g_src)}</pre>"))
+            else:
+                with graph_out:
+                    ipy_display(HTML(
+                        f"<pre style='font-size:0.78em;color:#374151;'>"
+                        f"{self._onto_fallback_text(g_src)}</pre>"))
+            schema_panels.append((key, fn, graph_out))
 
-                preview_tab_children.append(graph_out)
-                preview_tab_titles.append(f"{key}")
-
-            if preview_tab_children:
-                panels.append(widgets.HTML(
-                    "<div style='font-weight:600;color:#374151;margin:14px 0 2px 0;'>"
-                    "🕸️ Aperçu schéma fléché par source</div>"
-                    f"<div style='font-size:0.78em;color:#6b7280;margin-bottom:6px;'>"
-                    f"Bleu = nœuds sources · Vert = objets · {triplets_per_node} triplets/nœud · "
-                    f"{max_source_nodes} sources max (configurable dans <code>loading.preview</code>)</div>"
-                ))
-                if len(preview_tab_children) == 1:
-                    panels.append(preview_tab_children[0])
-                else:
-                    ptabs = widgets.Tab(children=preview_tab_children)
-                    for i, t in enumerate(preview_tab_titles):
-                        ptabs.set_title(i, t)
-                    panels.append(ptabs)
-        except Exception as e:
+        if schema_panels:
             panels.append(widgets.HTML(
-                f"<div style='color:#9ca3af;font-size:0.8em;'>Aperçu schéma indisponible: {e}</div>"))
+                "<div style='font-weight:600;color:#374151;margin:14px 0 2px 0;'>"
+                "🕸️ Aperçu schéma fléché par source</div>"
+                f"<div style='font-size:0.78em;color:#6b7280;margin-bottom:6px;'>"
+                f"Bleu = sources · Vert = objets · Orange = pivot · "
+                f"{tpn} triplets/nœud · {max_src} sources max</div>"
+            ))
+            if len(schema_panels) == 1:
+                panels.append(schema_panels[0][2])
+            else:
+                # Accordion plutôt que Tab — plus compatible Kaggle/Voilà
+                acc = widgets.Accordion(children=[p[2] for p in schema_panels])
+                for i, (key, fn, _) in enumerate(schema_panels):
+                    acc.set_title(i, f"{key}  ({fn})")
+                acc.selected_index = 0
+                panels.append(acc)
 
         # ── 4. Tableau de triplets par ontologie (compact) ────────────────────
-        panels.append(widgets.HTML(
-            "<div style='font-weight:600;color:#374151;margin:14px 0 4px 0;'>"
-            "📄 Aperçu des triplets par source</div>"
-        ))
-        max_preview_rows = int(preview_cfg.get("onto_max_preview_rows", 50))
-        tab_children, tab_titles = [], []
+        max_preview_rows = self._onto_cfg(preview_cfg, "onto_max_preview_rows")
+        filter_meta      = self._onto_cfg(preview_cfg, "onto_filter_meta")
+
+        triple_panels = []
         for key in onto_keys:
-            g = self.state.data_raw.get(key)
-            if not g or not hasattr(g, "__iter__"):
+            g_src = self.state.data_raw.get(key)
+            if not g_src or not hasattr(g_src, "__iter__"):
                 continue
-            rows = []
-            for s, p, o in g:
-                rows.append({
-                    "Subject":   str(s).split("#")[-1] if "#" in str(s) else str(s).rsplit("/",1)[-1],
-                    "Predicate": str(p).split("#")[-1] if "#" in str(p) else str(p).rsplit("/",1)[-1],
-                    "Object":    str(o).split("#")[-1] if "#" in str(o) else str(o).rsplit("/",1)[-1],
-                })
-                if len(rows) >= max_preview_rows:
-                    break
-            df_triples = pd.DataFrame(rows)
+            fn = getattr(g_src, "_orig_filename", key)
+            df_triples, n_filtered, n_total = self._onto_build_triple_df(
+                g_src, max_preview_rows, filter_meta)
             tab_out = widgets.Output()
             with tab_out:
+                note = (f" · {n_filtered} triplets méta filtrés" if n_filtered else "")
                 ipy_display(HTML(
                     f"<div style='font-size:0.8em;color:#6b7280;margin-bottom:4px;'>"
-                    f"{len(g)} triples au total — affichage des {max_preview_rows} premiers</div>"
+                    f"{n_total} triplets au total — affichage des {len(df_triples)}{note}</div>"
                 ))
                 ipy_display(df_triples)
-            tab_children.append(tab_out)
-            fn = getattr(g, "_orig_filename", key)
-            tab_titles.append(f"{key} ({fn})")
+            triple_panels.append((key, fn, tab_out))
 
-        if tab_children:
-            tabs = widgets.Tab(children=tab_children)
-            for i, t in enumerate(tab_titles):
-                tabs.set_title(i, t)
-            panels.append(tabs)
+        if triple_panels:
+            panels.append(widgets.HTML(
+                "<div style='font-weight:600;color:#374151;margin:14px 0 4px 0;'>"
+                "📄 Aperçu des triplets par source</div>"
+            ))
+            if len(triple_panels) == 1:
+                panels.append(triple_panels[0][2])
+            else:
+                # Accordion pour compatibilité Kaggle/Voilà
+                acc2 = widgets.Accordion(children=[p[2] for p in triple_panels])
+                for i, (key, fn, _) in enumerate(triple_panels):
+                    acc2.set_title(i, f"{key}  ({fn})")
+                acc2.selected_index = 0
+                panels.append(acc2)
 
         if panels:
             ipy_display(widgets.VBox(panels, layout=widgets.Layout(
@@ -1242,8 +1428,13 @@ class DataLoaderUI:
                     ))
                     display(data.head())
                 else:
-                    size_str = str(getattr(data, "shape", getattr(data, "__len__", lambda: "?")())) 
-                    display(HTML(f"<h4>{key} (Type: {type(data).__name__}, Size: {size_str})</h4>"))
+                    ds_type = self.state.data_types.get(key, "")
+                    size_str = str(len(data)) if hasattr(data, "__len__") else "?"
+                    display(HTML(
+                        f"<div style='padding:6px 0;color:#374151;font-size:0.9em;'>"
+                        f"<b>{key}</b> — Type: {ds_type or type(data).__name__}, "
+                        f"Size: {size_str}</div>"
+                    ))
                     if isinstance(data, str):
                         print(data[:500] + ("..." if len(data) > 500 else ""))
 

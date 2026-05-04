@@ -927,23 +927,130 @@ class UltimateEDA:
             print(text[:2000] + ("\n... [TRUNCATED]" if len(text) > 2000 else ""))
 
     def _build_graph_ui(self, G) -> None:
-        out = widgets.Output()
-        self.dynamic_ui.children = [out]
-        with out:
+        """EDA pour un graphe NetworkX — stats, distribution de degrés, visualisation avec densité."""
+        from IPython.display import display as _disp
+        try:
             import networkx as nx
-            print(f"Nodes: {G.number_of_nodes()}  |  Edges: {G.number_of_edges()}  |  Directed: {G.is_directed()}")
-            fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+        except ImportError:
+            self.dynamic_ui.children = [widgets.HTML(
+                "<div style='padding:12px;color:#b91c1c;'>networkx non disponible.</div>")]
+            return
+
+        n_nodes = G.number_of_nodes()
+        n_edges = G.number_of_edges()
+        is_dir  = G.is_directed()
+
+        # ── Tab 0 : Stats ─────────────────────────────────────────────────────
+        stats_out = widgets.Output()
+        with stats_out:
+            degrees = [d for _, d in G.degree()]
+            summary = [
+                {"Métrique": "Nœuds",              "Valeur": n_nodes},
+                {"Métrique": "Arêtes",              "Valeur": n_edges},
+                {"Métrique": "Dirigé",              "Valeur": str(is_dir)},
+                {"Métrique": "Densité",             "Valeur": f"{nx.density(G):.6f}"},
+                {"Métrique": "Degré moyen",         "Valeur": f"{sum(degrees)/max(n_nodes,1):.2f}"},
+                {"Métrique": "Degré max",           "Valeur": max(degrees) if degrees else 0},
+                {"Métrique": "Composantes connexes","Valeur": nx.number_connected_components(G.to_undirected())},
+            ]
+            _disp(HTML("<b style='color:#374151;font-size:0.9em;'>Résumé du graphe</b>"))
+            _disp(pd.DataFrame(summary).set_index("Métrique"))
+
+            # Distribution des degrés
+            fig, axes = plt.subplots(1, 2, figsize=(12, 4))
             fig.patch.set_facecolor("#f8fafc")
-            degrees = [d for n, d in G.degree()]
             sns.histplot(degrees, bins=30, kde=True, color="#10b981", ax=axes[0])
-            axes[0].set_title("Node Degree Distribution"); axes[0].set_xlabel("Degree")
-            sub_nodes = list(G.nodes())[:100]
-            H = G.subgraph(sub_nodes)
-            nx.draw(H, node_size=20, alpha=0.6, edge_color="#9ca3af",
-                    node_color="#3b82f6", ax=axes[1])
-            axes[1].set_title("Graph Sample (100 nodes)")
+            axes[0].set_title("Distribution des degrés"); axes[0].set_xlabel("Degré")
+            axes[0].set_facecolor("#f8fafc")
+            # Top nœuds par degré
+            top_nodes = sorted(G.degree(), key=lambda x: -x[1])[:15]
+            axes[1].barh([str(n) for n, _ in top_nodes[::-1]],
+                          [d for _, d in top_nodes[::-1]], color="#3b82f6", alpha=0.8)
+            axes[1].set_title("Top 15 nœuds par degré"); axes[1].set_xlabel("Degré")
+            axes[1].set_facecolor("#f8fafc")
             plt.tight_layout()
-            display(fig); plt.close(fig)
+            _disp(fig); plt.close(fig)
+
+        # ── Tab 1 : Visualisation avec densité ────────────────────────────────
+        graph_out = widgets.Output()
+        density_slider = widgets.IntSlider(
+            value=min(100, n_nodes), min=10, max=min(500, n_nodes), step=10,
+            description="Nœuds max:", style={"description_width": "initial"},
+            layout=widgets.Layout(width="320px"))
+        layout_dd = widgets.Dropdown(
+            options=["spring", "kamada_kawai", "circular", "shell", "spectral"],
+            value="spring", description="Layout:", layout=widgets.Layout(width="200px"))
+        plot_btn  = widgets.Button(description="Générer", button_style=styles.BTN_PRIMARY,
+                                    layout=styles.LAYOUT_BTN_STD)
+        save_btn  = widgets.Button(description="Save Dashboard", button_style="info",
+                                    layout=styles.LAYOUT_BTN_STD)
+        self._last_graph_fig = None
+
+        def _plot_graph(_=None):
+            with graph_out:
+                clear_output(wait=True)
+                n_max = density_slider.value
+                sub_nodes = list(G.nodes())[:n_max]
+                H = G.subgraph(sub_nodes)
+                fig, ax = plt.subplots(figsize=(12, 7))
+                fig.patch.set_facecolor("#f8fafc"); ax.set_facecolor("#f8fafc")
+                lay = layout_dd.value
+                try:
+                    if lay == "kamada_kawai":
+                        pos = nx.kamada_kawai_layout(H)
+                    elif lay == "circular":
+                        pos = nx.circular_layout(H)
+                    elif lay == "shell":
+                        pos = nx.shell_layout(H)
+                    elif lay == "spectral":
+                        pos = nx.spectral_layout(H)
+                    else:
+                        pos = nx.spring_layout(H, k=1.5, seed=42)
+                except Exception:
+                    pos = nx.spring_layout(H, k=1.5, seed=42)
+                deg = dict(H.degree())
+                max_d = max(deg.values()) if deg else 1
+                node_sizes  = [200 + 800 * (deg.get(n, 0) / max_d) for n in H.nodes()]
+                node_colors = [deg.get(n, 0) for n in H.nodes()]
+                nc = nx.draw_networkx_nodes(H, pos, node_size=node_sizes,
+                                             node_color=node_colors, cmap=plt.cm.viridis,
+                                             alpha=0.85, ax=ax)
+                plt.colorbar(nc, ax=ax, label="Degré", shrink=0.6)
+                nx.draw_networkx_edges(H, pos, edge_color="#cbd5e1", alpha=0.5,
+                                       arrows=is_dir, arrowsize=10, ax=ax)
+                if n_max <= 50:
+                    nx.draw_networkx_labels(H, pos, font_size=7, font_color="white",
+                                            font_weight="bold", ax=ax)
+                ax.set_title(
+                    f"Graphe — {H.number_of_nodes()} nœuds · {H.number_of_edges()} arêtes "
+                    f"(/{n_nodes} nœuds total) · layout={lay}",
+                    fontsize=9, color="#374151")
+                ax.axis("off")
+                plt.tight_layout()
+                _disp(fig)
+                self._last_graph_fig = fig
+                plt.close(fig)
+
+        plot_btn.on_click(_plot_graph)
+        save_btn.on_click(lambda b: self.dashboard.add(
+            self._last_graph_fig, f"Graphe ({density_slider.value} nœuds, {layout_dd.value})")
+            if self._last_graph_fig else None)
+
+        graph_tab = widgets.VBox([
+            styles.help_box(
+                "<b>Nœuds max:</b> réduire pour moins de bruit. "
+                "<b>Layout:</b> spring = force-directed, kamada_kawai = plus lisible pour petits graphes. "
+                "La couleur et la taille des nœuds reflètent leur degré.", "#10b981"),
+            widgets.HBox([density_slider, layout_dd],
+                          layout=widgets.Layout(gap="12px", align_items="center", margin="6px 0")),
+            widgets.HBox([plot_btn, save_btn],
+                          layout=widgets.Layout(gap="8px", align_items="center")),
+            graph_out])
+
+        graph_tabs = widgets.Tab(children=[stats_out, graph_tab])
+        for i, t in enumerate(["Stats", "Visualisation"]):
+            graph_tabs.set_title(i, t)
+        self.dynamic_ui.children = [graph_tabs]
 
     def _build_ontology_ui(self, g) -> None:
         """EDA complète pour une ontologie RDF/OWL — onglets Stats, Graphe, Triplets, Namespaces, Hiérarchie."""
@@ -1281,9 +1388,50 @@ class UltimateEDA:
             widgets.HBox([hier_btn], layout=widgets.Layout(margin="6px 0")),
             hier_out])
 
+        # ── Tab 5 : Analyse sémantique ────────────────────────────────────────
+        analyse_out = widgets.Output()
+        with analyse_out:
+            # Distribution des prédicats
+            from collections import Counter as _Ctr
+            pred_counts = _Ctr(_short(p) for _, p, _ in g)
+            top_preds   = pred_counts.most_common(20)
+            if top_preds:
+                _disp(HTML("<b style='color:#374151;font-size:0.9em;'>Top 20 prédicats</b>"))
+                _disp(pd.DataFrame(top_preds, columns=["Prédicat", "Occurrences"]))
+                fig, ax = plt.subplots(figsize=(10, 4))
+                fig.patch.set_facecolor("#f8fafc"); ax.set_facecolor("#f8fafc")
+                labels_p = [p for p, _ in top_preds[:15]]
+                values_p = [c for _, c in top_preds[:15]]
+                ax.barh(labels_p[::-1], values_p[::-1], color="#8b5cf6", alpha=0.8)
+                ax.set_title("Distribution des prédicats (top 15)", fontsize=9)
+                ax.set_xlabel("Occurrences")
+                plt.tight_layout()
+                _disp(fig); plt.close(fig)
+
+            # Top individus (nœuds les plus connectés comme sujet)
+            subj_counts = _Ctr(_short(s) for s, _, _ in g)
+            top_subjs   = [(s, c) for s, c in subj_counts.most_common(20) if s]
+            if top_subjs:
+                _disp(HTML("<br><b style='color:#374151;font-size:0.9em;'>Top 20 sujets (nœuds les plus actifs)</b>"))
+                _disp(pd.DataFrame(top_subjs, columns=["Sujet", "Triplets en tant que sujet"]))
+
+            # Métriques de densité
+            n_subj  = len({s for s, _, _ in g})
+            n_pred  = len({p for _, p, _ in g})
+            n_obj   = len({o for _, _, o in g})
+            density = n_triples / max(n_subj * n_pred, 1)
+            metrics = [
+                {"Métrique": "Sujets distincts",   "Valeur": n_subj},
+                {"Métrique": "Prédicats distincts", "Valeur": n_pred},
+                {"Métrique": "Objets distincts",    "Valeur": n_obj},
+                {"Métrique": "Densité (triples / sujets×prédicats)", "Valeur": f"{density:.4f}"},
+            ]
+            _disp(HTML("<br><b style='color:#374151;font-size:0.9em;'>Métriques de densité</b>"))
+            _disp(pd.DataFrame(metrics).set_index("Métrique"))
+
         # ── Assemblage des onglets ────────────────────────────────────────────
-        onto_tabs = widgets.Tab(children=[stats_out, graph_tab, triplets_tab, ns_out, hier_tab])
-        for i, title in enumerate(["Stats", "Graphe", "Triplets", "Namespaces", "Hiérarchie"]):
+        onto_tabs = widgets.Tab(children=[stats_out, graph_tab, triplets_tab, ns_out, hier_tab, analyse_out])
+        for i, title in enumerate(["Stats", "Graphe", "Triplets", "Namespaces", "Hiérarchie", "Analyse"]):
             onto_tabs.set_title(i, title)
 
         self.dynamic_ui.children = [onto_tabs]
